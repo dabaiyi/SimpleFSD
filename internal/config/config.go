@@ -8,16 +8,17 @@ import (
 )
 
 type Config struct {
-	DebugMode    bool   `json:"debug_mode"`  // 是否启用调试模式
-	AppName      string `json:"app_name"`    // 应用名称
-	AppVersion   string `json:"app_version"` // 应用版本
-	MaxWorkers   int    `json:"max_workers"` // 并发线程数
-	ServerConfig struct {
+	DebugMode           bool   `json:"debug_mode"`            // 是否启用调试模式
+	AppName             string `json:"app_name"`              // 应用名称
+	AppVersion          string `json:"app_version"`           // 应用版本
+	MaxWorkers          int    `json:"max_workers"`           // 并发线程数
+	MaxBroadcastWorkers int    `json:"max_broadcast_workers"` // 广播并发线程数
+	ServerConfig        struct {
 		Host              string   `json:"host"`
 		Port              uint64   `json:"port"`
 		EnableGRPC        bool     `json:"enable_grpc"`
 		GRPCPort          uint64   `json:"grpc_port"`
-		HeartbeatInterval int      `json:"heartbeat_interval"`
+		HeartbeatInterval string   `json:"heartbeat_interval"`
 		Motd              []string `json:"motd"`
 	} `json:"server_config"`
 	DatabaseConfig struct {
@@ -45,10 +46,10 @@ func ReadConfig() (*Config, error) {
 
 	if err != nil {
 		// 如果配置文件不存在，创建默认配置
-		writer, _ := os.OpenFile("config.json", os.O_RDONLY|os.O_CREATE, 0777)
-		data, _ := json.MarshalIndent(config, "", "\t")
-		_, _ = writer.Write(data)
-		_ = writer.Close()
+		config.RatingConfig = make(map[string]int)
+		if err := SaveConfig(); err != nil {
+			return nil, err
+		}
 		return nil, errors.New("the configuration file does not exist and has been created. Please try again after editing the configuration file")
 	}
 
@@ -61,6 +62,26 @@ func ReadConfig() (*Config, error) {
 
 	initialized = true
 	return &config, nil
+}
+
+func SaveConfig() error {
+	writer, err := os.OpenFile("config.json", os.O_WRONLY|os.O_CREATE, 0777)
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(config, "", "\t")
+	if err != nil {
+		return err
+	}
+	_, err = writer.Write(data)
+	if err != nil {
+		return err
+	}
+	err = writer.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetConfig 获取配置，如果未初始化则先读取配置

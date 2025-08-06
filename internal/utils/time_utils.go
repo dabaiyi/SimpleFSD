@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/logger"
+	"github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
 	"strconv"
 	"strings"
 	"time"
@@ -12,7 +12,7 @@ func ParseStringTime(timeString string) time.Duration {
 	if cutString, _, found := strings.Cut(timeString, "s"); found {
 		number, err := strconv.Atoi(cutString)
 		if err != nil {
-			logger.ErrorF("Error parsing time string: %s", err.Error())
+			config.ErrorF("Error parsing time string: %s", err.Error())
 			return 0
 		}
 		return time.Duration(number) * time.Second
@@ -20,7 +20,7 @@ func ParseStringTime(timeString string) time.Duration {
 	if cutString, _, found := strings.Cut(timeString, "m"); found {
 		number, err := strconv.Atoi(cutString)
 		if err != nil {
-			logger.ErrorF("Error parsing time string: %s", err.Error())
+			config.ErrorF("Error parsing time string: %s", err.Error())
 			return 0
 		}
 		return time.Duration(number) * time.Minute
@@ -28,7 +28,7 @@ func ParseStringTime(timeString string) time.Duration {
 	if cutString, _, found := strings.Cut(timeString, "h"); found {
 		number, err := strconv.Atoi(cutString)
 		if err != nil {
-			logger.ErrorF("Error parsing time string: %s", err.Error())
+			config.ErrorF("Error parsing time string: %s", err.Error())
 			return 0
 		}
 		return time.Duration(number) * time.Hour
@@ -36,11 +36,11 @@ func ParseStringTime(timeString string) time.Duration {
 	if cutString, _, found := strings.Cut(timeString, "d"); found {
 		number, err := strconv.Atoi(cutString)
 		if err != nil {
-			logger.ErrorF("Error parsing time string: %s", err.Error())
+			config.ErrorF("Error parsing time string: %s", err.Error())
 			return 0
 		}
 		return time.Duration(number) * time.Hour * 24
 	}
-	logger.ErrorF("invalid time format: %s", timeString)
+	config.ErrorF("invalid time format: %s", timeString)
 	return 0
 }

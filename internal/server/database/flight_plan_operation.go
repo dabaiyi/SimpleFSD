@@ -15,6 +15,32 @@ func GetFlightPlan(callsign string) (*FlightPlan, error) {
 	return &flightPlan, nil
 }
 
+func CreateFlightPlan(callsign string, flightPlanData []string) (*FlightPlan, error) {
+	flightPlan := FlightPlan{
+		Callsign:         callsign,
+		FlightType:       flightPlanData[2],
+		AircraftType:     flightPlanData[3],
+		Tas:              utils.StrToInt(flightPlanData[4], 100),
+		DepartureAirport: flightPlanData[5],
+		DepartureTime:    utils.StrToInt(flightPlanData[6], 0),
+		AtcDepartureTime: utils.StrToInt(flightPlanData[7], 0),
+		CruiseAltitude:   flightPlanData[8],
+		ArrivalAirport:   flightPlanData[9],
+		RouteTime:        utils.StrToInt(flightPlanData[10]+flightPlanData[11], 0),
+		FuelTime:         utils.StrToInt(flightPlanData[12]+flightPlanData[13], 0),
+		AlternateAirport: flightPlanData[14],
+		Remarks:          flightPlanData[15],
+		Route:            flightPlanData[16],
+		Locked:           false,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	if err := database.WithContext(ctx).Save(&flightPlan).Error; err != nil {
+		return nil, err
+	}
+	return &flightPlan, nil
+}
+
 func (flightPlan *FlightPlan) Lock() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
@@ -22,16 +48,16 @@ func (flightPlan *FlightPlan) Lock() bool {
 	return err == nil
 }
 
-func (flightPlan *FlightPlan) Unlock() bool {
+func (flightPlan *FlightPlan) Unlock() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	err := database.WithContext(ctx).Model(flightPlan).Update("locked", false).Error
-	return err == nil
+	return err
 }
 
-func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string) bool {
+func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string) error {
 	if flightPlan.Locked {
-		return false
+		return nil
 	}
 	flightPlan.FlightType = flightPlanData[2]
 	flightPlan.AircraftType = flightPlanData[3]
@@ -49,5 +75,5 @@ func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	err := database.WithContext(ctx).Save(&flightPlan).Error
-	return err == nil
+	return err
 }

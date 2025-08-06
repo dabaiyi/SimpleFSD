@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	. "fmt"
 	c "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
 	"github.com/Skylite-Dev-Team/skylite-fsd/internal/utils"
@@ -14,6 +15,25 @@ var (
 	database     *gorm.DB
 	queryTimeout time.Duration
 )
+
+type DBCloseCallback struct {
+}
+
+func NewDBCloseCallback() *DBCloseCallback {
+	return &DBCloseCallback{}
+}
+
+func (dc *DBCloseCallback) Invoke(ctx context.Context) error {
+	c.InfoF("Closing database connection")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	db, err := database.DB()
+	if err != nil {
+		return err
+	}
+	err = db.Close()
+	return err
+}
 
 func ConnectDatabase() error {
 	config, _ := c.GetConfig()
@@ -59,5 +79,6 @@ func ConnectDatabase() error {
 	if err != nil {
 		return Errorf("error occured while pinging database: %v", err)
 	}
+	c.NewCleaner().Add(NewDBCloseCallback())
 	return nil
 }

@@ -1,9 +1,8 @@
-package logger
+package config
 
 import (
 	"context"
 	"fmt"
-	c "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
 	"github.com/fatih/color"
 	"io"
 	"log/slog"
@@ -197,7 +196,7 @@ func (lc *ShutdownCallback) Invoke(ctx context.Context) error {
 
 func Init() *ShutdownCallback {
 	var handler *AsyncHandler
-	config, _ := c.GetConfig()
+	config, _ := GetConfig()
 	if config.DebugMode {
 		handler = NewAsyncHandler("logs", slog.LevelDebug)
 	} else {
