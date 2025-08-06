@@ -46,7 +46,12 @@ type Client struct {
 }
 
 func NewClient(callsign string, rating Rating, cid database.UserId, protocol int, realName string, socket net.Conn, isAtc bool) *Client {
-	flightPlan, _ := database.GetFlightPlan(callsign)
+	var flightPlan *database.FlightPlan = nil
+	if !isAtc {
+		flightPlan, _ = database.GetFlightPlan(callsign)
+	} else {
+		flightPlan = nil
+	}
 	return &Client{
 		IsAtc:          isAtc,
 		Callsign:       callsign,

@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"github.com/Skylite-Dev-Team/skylite-fsd/internal/utils"
 )
 
@@ -76,4 +77,12 @@ func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string) error {
 	defer cancel()
 	err := database.WithContext(ctx).Save(&flightPlan).Error
 	return err
+}
+
+func (flightPlan *FlightPlan) ToString(receiver string) string {
+	return fmt.Sprintf("$FP%s:%s:%s:%s:%d:%s:%d:%d:%s:%s:%d:%d:%d:%d:%s:%s:%s\r\n",
+		flightPlan.Callsign, receiver, flightPlan.FlightType, flightPlan.AircraftType, flightPlan.Tas,
+		flightPlan.DepartureAirport, flightPlan.DepartureTime, flightPlan.AtcDepartureTime, flightPlan.CruiseAltitude,
+		flightPlan.ArrivalAirport, flightPlan.RouteTime/100, flightPlan.RouteTime%100, flightPlan.FuelTime/100,
+		flightPlan.FuelTime%100, flightPlan.AlternateAirport, flightPlan.Remarks, flightPlan.Route)
 }

@@ -9,6 +9,8 @@ const (
 	CallsignMinLen = 3
 	CallsignMaxLen = 12
 	ForbiddenChars = "!@#$%*:& \t"
+	FrequencyMin   = 18000
+	FrequencyMax   = 36975
 )
 
 func parserCommandLine(line []byte) (ClientCommand, []string) {
@@ -66,4 +68,8 @@ func callsignValid(callsign string) bool {
 	}
 
 	return true
+}
+
+func frequencyValid(frequency int) bool {
+	return FrequencyMin <= frequency && frequency <= FrequencyMax
 }

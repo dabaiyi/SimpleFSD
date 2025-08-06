@@ -1,6 +1,8 @@
 package packet
 
-import "math"
+import (
+	"math"
+)
 
 type BroadcastFilter func(toClient, fromClient *Client) bool
 

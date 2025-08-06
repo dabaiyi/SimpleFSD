@@ -100,6 +100,7 @@ func (f Facility) CheckFacility(facility Facility) bool {
 	return f&facility != 0
 }
 
+var allowEditPlanFacility = DEL | GND | TWR | APP | CTR | FSS
 var ratingFacilityMap = map[Rating]Facility{
 	Ban:           0,
 	Normal:        Pilot,
@@ -167,8 +168,9 @@ var (
 )
 
 var PossibleClientCommands = [][]byte{[]byte(PilotPosition), []byte(AtcPosition), []byte(AtcSubVisPoint),
-	[]byte(Message), []byte(ClientQuery), []byte(ClientResponse), []byte(RequestHandoff), []byte(AcceptHandoff),
-	[]byte(ProController), []byte(AddAtc), []byte(RemoveAtc), []byte(AddPilot), []byte(RemovePilot)}
+	[]byte(Message), []byte(ClientQuery), []byte(ClientResponse), []byte(Plan), []byte(AtcEditPlan), []byte(RequestHandoff),
+	[]byte(AcceptHandoff), []byte(ProController), []byte(AddAtc), []byte(RemoveAtc), []byte(AddPilot), []byte(RemovePilot),
+	[]byte(KillClient)}
 
 func (c ClientCommand) String() string {
 	return string(c)
@@ -193,3 +195,11 @@ func (b BroadcastTarget) String() string {
 func (b BroadcastTarget) Index() int {
 	return 0
 }
+
+type SpecialFrequency int
+
+var (
+	SimulatorFrequency SpecialFrequency = 94835
+)
+
+var specialFrequencies = []SpecialFrequency{SimulatorFrequency}

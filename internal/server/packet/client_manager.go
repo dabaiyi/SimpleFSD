@@ -125,7 +125,7 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, fi
 		if client == fromClient {
 			continue
 		}
-		if filter(client, fromClient) {
+		if !filter(client, fromClient) {
 			continue
 		}
 		wg.Add(1)
@@ -136,6 +136,9 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, fi
 				wg.Done()
 			}()
 			c.DebugF("[Broadcast] -> [%s] %s", cl.Callsign, message)
+			if cl.Socket == nil {
+				return
+			}
 			_, _ = cl.Socket.Write(fullMsg)
 		}(client)
 	}
