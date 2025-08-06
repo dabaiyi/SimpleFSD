@@ -4,9 +4,9 @@ import (
 	"context"
 	. "fmt"
 	c "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/utils"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"net/url"
 	"time"
 )
@@ -37,7 +37,7 @@ func (dc *DBCloseCallback) Invoke(ctx context.Context) error {
 
 func ConnectDatabase() error {
 	config, _ := c.GetConfig()
-	queryTimeout = utils.ParseStringTime(config.DatabaseConfig.QueryTimeout)
+	queryTimeout = config.DatabaseConfig.QueryDuration
 
 	encodedUser := url.QueryEscape(config.DatabaseConfig.Username)
 	encodedPass := url.QueryEscape(config.DatabaseConfig.Password)
@@ -52,6 +52,12 @@ func ConnectDatabase() error {
 	connectionConfig := gorm.Config{}
 	connectionConfig.DefaultTransactionTimeout = 5 * time.Second
 	connectionConfig.PrepareStmt = true
+
+	if config.DebugMode {
+		connectionConfig.Logger = logger.Default.LogMode(logger.Error)
+	} else {
+		connectionConfig.Logger = logger.Default.LogMode(logger.Silent)
+	}
 
 	db, err := gorm.Open(mysql.Open(dsn), &connectionConfig)
 	if err != nil {
@@ -74,7 +80,7 @@ func ConnectDatabase() error {
 
 	dbPool.SetMaxIdleConns(int(maxIdleConnections))
 	dbPool.SetMaxOpenConns(int(maxOpenConnections))
-	dbPool.SetConnMaxLifetime(utils.ParseStringTime(config.DatabaseConfig.ConnectIdleTimeout))
+	dbPool.SetConnMaxLifetime(config.DatabaseConfig.ConnectIdleDuration)
 	err = dbPool.Ping()
 	if err != nil {
 		return Errorf("error occured while pinging database: %v", err)

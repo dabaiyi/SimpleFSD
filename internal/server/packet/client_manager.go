@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	c "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/utils"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -22,7 +21,7 @@ func NewServerCloseCallback() *ServerCloseCallback {
 	return &ServerCloseCallback{}
 }
 
-func (dc *ServerCloseCallback) Invoke(ctx context.Context) error {
+func (dc *ServerCloseCallback) Invoke(_ context.Context) error {
 	heartbeatSender.Stop()
 	return nil
 }
@@ -39,14 +38,14 @@ var (
 	}
 )
 
-func NewClientManager() *ClientManager {
+func GetClientManager() *ClientManager {
 	once.Do(func() {
 		config, _ = c.GetConfig()
 		if clientManager == nil {
 			clientManager = &ClientManager{
 				clients: make(map[string]*Client),
 			}
-			heartbeatSender = NewHeartbeatSender(utils.ParseStringTime(config.ServerConfig.HeartbeatInterval), clientManager.SendHeartBeat)
+			heartbeatSender = NewHeartbeatSender(config.ServerConfig.HeartbeatDuration, clientManager.SendHeartBeat)
 			c.NewCleaner().Add(NewServerCloseCallback())
 		}
 	})
@@ -98,7 +97,7 @@ func (cm *ClientManager) SendMessageTo(callsign string, message []byte) error {
 		return err
 	}
 	message = append(message, splitSign...)
-	_, err = client.Socket.Conn.Write(message)
+	_, err = client.Socket.Write(message)
 	return err
 }
 
@@ -123,6 +122,9 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, fi
 	sem := make(chan struct{}, config.MaxBroadcastWorkers)
 
 	for _, client := range clients {
+		if client == fromClient {
+			continue
+		}
 		if filter(client, fromClient) {
 			continue
 		}
@@ -133,7 +135,8 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, fi
 				<-sem
 				wg.Done()
 			}()
-			_, _ = cl.Socket.Conn.Write(fullMsg)
+			c.DebugF("[Broadcast] -> [%s] %s", cl.Callsign, message)
+			_, _ = cl.Socket.Write(fullMsg)
 		}(client)
 	}
 	wg.Wait()

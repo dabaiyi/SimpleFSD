@@ -131,7 +131,7 @@ func SyncRatingConfig() {
 	}
 }
 
-type ClientCommand []byte
+type ClientCommand string
 
 var (
 	AddAtc          = ClientCommand("#AA")
@@ -166,8 +166,9 @@ var (
 	ReplyAcars      = ClientCommand("$AR")
 )
 
-var PossibleClientCommands = []ClientCommand{PilotPosition, AtcPosition, AtcSubVisPoint, Message, ClientQuery,
-	ClientResponse, RequestHandoff, AcceptHandoff, ProController, AddAtc, RemoveAtc, AddPilot, RemovePilot}
+var PossibleClientCommands = [][]byte{[]byte(PilotPosition), []byte(AtcPosition), []byte(AtcSubVisPoint),
+	[]byte(Message), []byte(ClientQuery), []byte(ClientResponse), []byte(RequestHandoff), []byte(AcceptHandoff),
+	[]byte(ProController), []byte(AddAtc), []byte(RemoveAtc), []byte(AddPilot), []byte(RemovePilot)}
 
 func (c ClientCommand) String() string {
 	return string(c)

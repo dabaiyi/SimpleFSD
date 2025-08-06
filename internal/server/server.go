@@ -7,18 +7,15 @@ import (
 	"net"
 )
 
-// sem 用于控制并发连接数的信号量
-var (
-	sem    chan struct{}
-	config *c.Config
-)
-
 // StartServer 启动MQTT服务器
-// port: 服务器监听的端口号
 func StartServer() {
 	config, _ := c.GetConfig()
+
+	// 初始化客户端管理器
+	_ = packet.GetClientManager()
+
 	// 创建TCP监听器
-	sem = make(chan struct{}, config.MaxWorkers)
+	sem := make(chan struct{}, config.MaxWorkers)
 	ln, err := net.Listen("tcp", Sprintf("%s:%d", config.ServerConfig.Host, config.ServerConfig.Port))
 	if err != nil {
 		c.FatalF("FSD Server Start error: %v", err)
@@ -49,6 +46,8 @@ func StartServer() {
 			connection := &packet.ConnectionHandler{
 				Conn:   conn,
 				ConnId: conn.RemoteAddr().String(),
+				Client: nil,
+				User:   nil,
 			}
 			connection.HandleConnection()
 			// 释放信号量
