@@ -100,6 +100,16 @@ func (cm *ClientManager) SendMessageTo(callsign string, message []byte) error {
 	return err
 }
 
+func (cm *ClientManager) GetClientCopy() []*Client {
+	cm.lock.Lock()
+	clients := make([]*Client, 0, len(cm.clients))
+	for _, client := range cm.clients {
+		clients = append(clients, client)
+	}
+	cm.lock.Unlock()
+	return clients
+}
+
 func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, filter BroadcastFilter) {
 	fullMsg := make([]byte, len(message)+len(splitSign))
 	copy(fullMsg, message)

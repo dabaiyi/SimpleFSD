@@ -78,6 +78,10 @@ func NewClient(callsign string, rating Rating, user *database.User, protocol int
 	}
 }
 
+func (c *Client) Disconnected() bool {
+	return c.disconnect
+}
+
 func (c *Client) Delete() {
 	c.lock.Lock()
 	defer c.lock.Unlock()

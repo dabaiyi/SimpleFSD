@@ -122,8 +122,8 @@ func (c *ConnectionHandler) handleAtcPosUpdate(data []string, rawLine []byte) *R
 	//  %  ZSHA_CTR 24550  6  600  5  27.28025 118.28701  0
 	// [0] [   1  ] [ 2 ] [3] [4] [5] [   6  ] [   7   ] [8]
 	callsign := data[0]
-	rating := Rating(utils.StrToInt(data[2], 0))
-	facility := Facility(utils.StrToInt(data[4], 0))
+	facility := Facility(utils.StrToInt(data[2], 0))
+	rating := Rating(utils.StrToInt(data[4], 0))
 	if !rating.CheckRatingFacility(facility) {
 		return ResultError(RequestLevelTooHigh, true, callsign)
 	}

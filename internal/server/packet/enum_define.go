@@ -86,7 +86,7 @@ const (
 	FSS
 )
 
-var facilityString = []string{"Pilot", "OBS", "DEL", "GND", "TWR", "APP", "FSS"}
+var facilityString = []string{"Pilot", "OBS", "DEL", "GND", "TWR", "APP", "CTR", "FSS"}
 
 func (f Facility) String() string {
 	return facilityString[f]

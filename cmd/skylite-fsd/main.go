@@ -1,14 +1,19 @@
 package main
 
 import (
+	"fmt"
 	c "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
+	__ "github.com/Skylite-Dev-Team/skylite-fsd/internal/grpc"
 	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server"
 	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server/database"
 	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server/packet"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+	"net"
 )
 
 func main() {
-	_, err := c.ReadConfig()
+	config, err := c.ReadConfig()
 	if err != nil {
 		c.FatalF("Error occurred while reading config %v", err)
 		return
@@ -23,7 +28,26 @@ func main() {
 		c.FatalF("Error occurred while initializing database, details: %v", err)
 		return
 	}
-	packet.SyncRatingConfig()
 	c.Info("Database initialized and connection established")
+	packet.SyncRatingConfig()
+	if config.ServerConfig.EnableGRPC {
+		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.ServerConfig.Host, config.ServerConfig.GRPCPort))
+		if err != nil {
+			c.FatalF("Fail to open grpc port: %v", err)
+			return
+		}
+		grpcServer := grpc.NewServer()
+		__.RegisterServerStatusServer(grpcServer, __.NewGrpcServer())
+		reflection.Register(grpcServer)
+		cleaner.Add(__.NewGrpcShutdownCallback(grpcServer))
+		go func() {
+			c.DebugF("GRPC server listen on %s", listener.Addr().String())
+			err := grpcServer.Serve(listener)
+			if err != nil {
+				c.FatalF("grpc failed to serve: %v", err)
+				return
+			}
+		}()
+	}
 	server.StartServer()
 }
