@@ -96,8 +96,7 @@ func (cm *ClientManager) SendMessageTo(callsign string, message []byte) error {
 	if err != nil {
 		return err
 	}
-	message = append(message, splitSign...)
-	_, err = client.Socket.Write(message)
+	client.SendLine(message)
 	return err
 }
 
@@ -122,7 +121,7 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, fi
 	sem := make(chan struct{}, config.MaxBroadcastWorkers)
 
 	for _, client := range clients {
-		if client == fromClient {
+		if client == fromClient || client.disconnect {
 			continue
 		}
 		if !filter(client, fromClient) {
@@ -136,10 +135,7 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, fi
 				wg.Done()
 			}()
 			c.DebugF("[Broadcast] -> [%s] %s", cl.Callsign, message)
-			if cl.Socket == nil {
-				return
-			}
-			_, _ = cl.Socket.Write(fullMsg)
+			cl.SendLine(message)
 		}(client)
 	}
 	wg.Wait()

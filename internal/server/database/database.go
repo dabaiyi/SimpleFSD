@@ -13,6 +13,7 @@ import (
 
 var (
 	database     *gorm.DB
+	config       *c.Config
 	queryTimeout time.Duration
 )
 
@@ -36,7 +37,7 @@ func (dc *DBCloseCallback) Invoke(ctx context.Context) error {
 }
 
 func ConnectDatabase() error {
-	config, _ := c.GetConfig()
+	config, _ = c.GetConfig()
 	queryTimeout = config.DatabaseConfig.QueryDuration
 
 	encodedUser := url.QueryEscape(config.DatabaseConfig.Username)

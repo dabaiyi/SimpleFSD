@@ -1,10 +1,12 @@
 package packet
 
 import (
+	"fmt"
 	logger "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
 	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server/database"
 	"github.com/Skylite-Dev-Team/skylite-fsd/internal/utils"
 	"strings"
+	"time"
 )
 
 func getUserId(cid string) database.UserId {
@@ -71,11 +73,11 @@ func (c *ConnectionHandler) handleAddAtc(data []string, rawLine []byte) *Result 
 	latitude := utils.StrToFloat(data[9], 0)
 	longitude := utils.StrToFloat(data[10], 0)
 	if c.Client == nil {
-		c.Client = NewClient(callsign, Rating(reqRating), cid, protocol, realName, c.Conn, true)
+		c.Client = NewClient(callsign, Rating(reqRating), c.User, protocol, realName, c.Conn, true)
 		_ = c.Client.SetPosition(0, latitude, longitude)
 		_ = clientManager.AddClient(c.Client)
 	}
-	_, _ = c.Conn.Write(makePacket(ClientQuery, "SERVER", callsign, "ATIS"))
+	c.Client.SendLine(makePacket(ClientQuery, "SERVER", callsign, "ATIS"))
 	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	c.Client.SendMotd()
 	logger.DebugF("[%s] Client login successfully", callsign)
@@ -100,13 +102,19 @@ func (c *ConnectionHandler) handleAddPilot(data []string, rawLine []byte) *Resul
 	simType := utils.StrToInt(data[6], 0)
 	realName := data[7]
 	if c.Client == nil {
-		c.Client = NewClient(callsign, reqRating, cid, protocol, realName, c.Conn, false)
+		c.Client = NewClient(callsign, reqRating, c.User, protocol, realName, c.Conn, false)
 		c.Client.SimType = simType
 		_ = clientManager.AddClient(c.Client)
 	}
 	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	c.Client.SendMotd()
 	logger.DebugF("[%s] Client login successfully", callsign)
+	if c.Client.FlightPlan != nil && c.Client.FlightPlan.FromWeb && callsign != c.Client.FlightPlan.Callsign {
+		c.Client.SendLine(makePacket(Message, "FPlanManager", callsign,
+			fmt.Sprintf("Seems you are connect with callsign(%s), "+
+				"but we found a flightplan submit by web which has callsign(%s), "+
+				"please check it.", callsign, c.Client.FlightPlan.Callsign)))
+	}
 	return ResultSuccess()
 }
 
@@ -141,21 +149,20 @@ func (c *ConnectionHandler) handlePilotPosUpdate(data []string, rawLine []byte) 
 	return ResultSuccess()
 }
 
-func (c *ConnectionHandler) handleAtcVisPointUpdate(data []string, rawLine []byte) *Result {
+func (c *ConnectionHandler) handleAtcVisPointUpdate(data []string, _ []byte) *Result {
 	//  '  ZSHA_CTR  0  36.67349 120.45621
 	// [0] [   1  ] [2] [   3  ] [   4   ]
 	visPos := utils.StrToInt(data[1], 0)
 	latitude := utils.StrToFloat(data[2], 0)
 	longitude := utils.StrToFloat(data[3], 0)
 	_ = c.Client.UpdateAtcVisPoint(visPos, latitude, longitude)
-	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	return ResultSuccess()
 }
 
-func (c *ConnectionHandler) sendFrequencyMessage(targetStation string, rawLine []byte) *Result {
-	frequency := utils.StrToInt(targetStation[1:], -1)
+func (c *ConnectionHandler) sendFrequencyMessage(targetStation string, rawLine []byte) (frequency int, result *Result) {
+	frequency = utils.StrToInt(targetStation[1:], -1)
 	if frequency == -1 {
-		return ResultError(Syntax, false, c.Client.Callsign)
+		result = ResultError(Syntax, false, c.Client.Callsign)
 	}
 	if frequencyValid(frequency) {
 		// 合法频率, 发给所有客户端
@@ -164,7 +171,7 @@ func (c *ConnectionHandler) sendFrequencyMessage(targetStation string, rawLine [
 		// 非法频率, 大概率是管制使用, 发给管制
 		clientManager.BroadcastMessage(rawLine, c.Client, CombineBroadcastFilter(BroadcastToAtc, BroadcastToClientInRange))
 	}
-	return nil
+	return
 }
 
 func (c *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *Result {
@@ -184,13 +191,28 @@ func (c *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *Re
 			if err != nil {
 				return ResultError(NoFlightPlan, false, c.Client.Callsign)
 			}
-			c.SendLine([]byte(client.FlightPlan.ToString(data[0])))
+			c.Client.SendLine([]byte(client.FlightPlan.ToString(data[0])))
 		}
 	}
 	if strings.HasPrefix(targetStation, "@") {
-		result := c.sendFrequencyMessage(targetStation, rawLine)
-		if result != nil {
-			return result
+		frequency, err := c.sendFrequencyMessage(targetStation, rawLine)
+		if err != nil {
+			return err
+		}
+		if frequency == specialFrequency {
+			subQuery := data[2]
+			if subQuery == "FA" {
+				targetCallsign := data[3]
+				client, err := clientManager.GetClient(targetCallsign)
+				if err != nil {
+					return ResultError(NoFlightPlan, false, c.Client.Callsign)
+				}
+				cruiseAltitude := utils.StrToInt(data[4], 0)
+				err = client.FlightPlan.UpdateCruiseAltitude(fmt.Sprintf("FL%03d", cruiseAltitude/100), true)
+				if err != nil {
+					return ResultError(Syntax, false, c.Client.Callsign)
+				}
+			}
 		}
 	} else {
 		_ = clientManager.SendMessageTo(targetStation, rawLine)
@@ -211,7 +233,7 @@ func (c *ConnectionHandler) handleClientResponse(data []string, rawLine []byte) 
 		}
 	}
 	if strings.HasPrefix(targetStation, "@") {
-		result := c.sendFrequencyMessage(targetStation, rawLine)
+		_, result := c.sendFrequencyMessage(targetStation, rawLine)
 		if result != nil {
 			return result
 		}
@@ -225,8 +247,11 @@ func (c *ConnectionHandler) handleMessage(data []string, rawLine []byte) *Result
 	// #TM ZSHA_CTR ZSSS_APP 111
 	// [0] [   1  ] [   2  ] [3]
 	targetStation := data[1]
+	if targetStation == "FP" {
+		return ResultSuccess()
+	}
 	if strings.HasPrefix(targetStation, "@") {
-		result := c.sendFrequencyMessage(targetStation, rawLine)
+		_, result := c.sendFrequencyMessage(targetStation, rawLine)
 		if result != nil {
 			return result
 		}
@@ -251,7 +276,7 @@ func (c *ConnectionHandler) handlePlan(data []string, rawLine []byte) *Result {
 	return ResultSuccess()
 }
 
-func (c *ConnectionHandler) handleAtcEditPlan(data []string, rawLine []byte) *Result {
+func (c *ConnectionHandler) handleAtcEditPlan(data []string, _ []byte) *Result {
 	// $AM ZYSH_CTR SERVER CPA421  I  H/A320/L 474 ZYTL 1115  0  FL371 ZYHB  11  8     22   6   ZYCC
 	// [0] [   1  ] [  2 ] [  3 ] [4] [   5  ] [6] [ 7] [ 8] [9] [ 10] [11] [12] [13] [14] [15] [16]
 	// /V/ SEL/AHFL CHI19D/28 VENOS A588 NULRA W206 MAGBI W656 ISLUK W629 LARUN
@@ -271,7 +296,7 @@ func (c *ConnectionHandler) handleAtcEditPlan(data []string, rawLine []byte) *Re
 		return ResultError(NoFlightPlan, false, c.Client.Callsign)
 	}
 	client.FlightPlan.Locked = true
-	err = client.UpdateFlightPlan(data[1:])
+	err = client.FlightPlan.UpdateFlightPlan(data[1:], true)
 	if err != nil {
 		return ResultError(Syntax, false, c.Client.Callsign)
 	}
@@ -280,9 +305,19 @@ func (c *ConnectionHandler) handleAtcEditPlan(data []string, rawLine []byte) *Re
 	return ResultSuccess()
 }
 
-//func (c *ConnectionHandler) handleKillClient(data []string, rawLine []byte) *Result {
-//
-//}
+func (c *ConnectionHandler) handleKillClient(data []string, _ []byte) *Result {
+	// $!! ZSHA_CTR CPA421 test
+	targetStation := data[1]
+	client, err := clientManager.GetClient(targetStation)
+	if err != nil {
+		return ResultError(Syntax, false, c.Client.Callsign)
+	}
+	time.AfterFunc(200*time.Millisecond, func() {
+		_ = client.Socket.Close()
+		client.MarkedDisconnect()
+	})
+	return ResultSuccess()
+}
 
 func (c *ConnectionHandler) handleRequest(data []string, rawLine []byte) *Result {
 	// $HO ZSSS_APP ZSHA_CTR CES2352
@@ -299,45 +334,28 @@ func (c *ConnectionHandler) HandleCommand(commandType ClientCommand, data []stri
 	switch commandType {
 	case AddAtc:
 		result = c.handleAddAtc(data, rawLine)
-		break
-	case RemoveAtc:
-		break
 	case AddPilot:
 		result = c.handleAddPilot(data, rawLine)
-		break
-	case RemovePilot:
-		break
-	case RequestHandoff:
-	case AcceptHandoff:
-	case ProController:
+	case RequestHandoff, AcceptHandoff, ProController:
 		result = c.handleRequest(data, rawLine)
-		break
 	case PilotPosition:
 		result = c.handlePilotPosUpdate(data, rawLine)
-		break
 	case Plan:
 		result = c.handlePlan(data, rawLine)
-		break
 	case AtcEditPlan:
 		result = c.handleAtcEditPlan(data, rawLine)
-		break
 	case KillClient:
-		break
+		result = c.handleKillClient(data, rawLine)
 	case AtcPosition:
 		result = c.handleAtcPosUpdate(data, rawLine)
-		break
 	case AtcSubVisPoint:
 		result = c.handleAtcVisPointUpdate(data, rawLine)
-		break
 	case Message:
 		result = c.handleMessage(data, rawLine)
-		break
 	case ClientQuery:
 		result = c.handleClientQuery(data, rawLine)
-		break
 	case ClientResponse:
 		result = c.handleClientResponse(data, rawLine)
-		break
 	default:
 		result = ResultSuccess()
 	}

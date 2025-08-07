@@ -6,18 +6,25 @@ import (
 	"github.com/Skylite-Dev-Team/skylite-fsd/internal/utils"
 )
 
-func GetFlightPlan(callsign string) (*FlightPlan, error) {
+func GetFlightPlan(cid int, callsign string) (*FlightPlan, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	flightPlan := FlightPlan{}
-	if err := database.WithContext(ctx).Where("callsign = ?", callsign).First(&flightPlan).Error; err != nil {
+	var err error
+	if config.SimulatorServer {
+		err = database.WithContext(ctx).Where("callsign=?", callsign).First(&flightPlan).Error
+	} else {
+		err = database.WithContext(ctx).Where("cid=?", cid).First(&flightPlan).Error
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &flightPlan, nil
 }
 
-func CreateFlightPlan(callsign string, flightPlanData []string) (*FlightPlan, error) {
+func CreateFlightPlan(user *User, callsign string, flightPlanData []string) (*FlightPlan, error) {
 	flightPlan := FlightPlan{
+		Cid:              user.Cid,
 		Callsign:         callsign,
 		FlightType:       flightPlanData[2],
 		AircraftType:     flightPlanData[3],
@@ -27,12 +34,15 @@ func CreateFlightPlan(callsign string, flightPlanData []string) (*FlightPlan, er
 		AtcDepartureTime: utils.StrToInt(flightPlanData[7], 0),
 		CruiseAltitude:   flightPlanData[8],
 		ArrivalAirport:   flightPlanData[9],
-		RouteTime:        utils.StrToInt(flightPlanData[10]+flightPlanData[11], 0),
-		FuelTime:         utils.StrToInt(flightPlanData[12]+flightPlanData[13], 0),
+		RouteTimeHour:    flightPlanData[10],
+		RouteTimeMinute:  flightPlanData[11],
+		FuelTimeHour:     flightPlanData[12],
+		FuelTimeMinute:   flightPlanData[13],
 		AlternateAirport: flightPlanData[14],
 		Remarks:          flightPlanData[15],
 		Route:            flightPlanData[16],
 		Locked:           false,
+		FromWeb:          false,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
@@ -56,8 +66,8 @@ func (flightPlan *FlightPlan) Unlock() error {
 	return err
 }
 
-func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string) error {
-	if flightPlan.Locked {
+func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string, atcEdit bool) error {
+	if !atcEdit && flightPlan.Locked {
 		return nil
 	}
 	flightPlan.FlightType = flightPlanData[2]
@@ -68,8 +78,10 @@ func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string) error {
 	flightPlan.AtcDepartureTime = utils.StrToInt(flightPlanData[7], 0)
 	flightPlan.CruiseAltitude = flightPlanData[8]
 	flightPlan.ArrivalAirport = flightPlanData[9]
-	flightPlan.RouteTime = utils.StrToInt(flightPlanData[10]+flightPlanData[11], 0)
-	flightPlan.FuelTime = utils.StrToInt(flightPlanData[12]+flightPlanData[13], 0)
+	flightPlan.RouteTimeHour = flightPlanData[10]
+	flightPlan.RouteTimeMinute = flightPlanData[11]
+	flightPlan.FuelTimeHour = flightPlanData[12]
+	flightPlan.FuelTimeMinute = flightPlanData[13]
 	flightPlan.AlternateAirport = flightPlanData[14]
 	flightPlan.Remarks = flightPlanData[15]
 	flightPlan.Route = flightPlanData[16]
@@ -79,10 +91,22 @@ func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string) error {
 	return err
 }
 
+func (flightPlan *FlightPlan) UpdateCruiseAltitude(cruiseAltitude string, atcEdit bool) error {
+	if !atcEdit && flightPlan.Locked {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+
+	err := database.WithContext(ctx).Model(flightPlan).Update("cruise_altitude", cruiseAltitude).Error
+	return err
+}
+
 func (flightPlan *FlightPlan) ToString(receiver string) string {
-	return fmt.Sprintf("$FP%s:%s:%s:%s:%d:%s:%d:%d:%s:%s:%d:%d:%d:%d:%s:%s:%s\r\n",
+	return fmt.Sprintf("$FP%s:%s:%s:%s:%d:%s:%d:%d:%s:%s:%s:%s:%s:%s:%s:%s:%s\r\n",
 		flightPlan.Callsign, receiver, flightPlan.FlightType, flightPlan.AircraftType, flightPlan.Tas,
 		flightPlan.DepartureAirport, flightPlan.DepartureTime, flightPlan.AtcDepartureTime, flightPlan.CruiseAltitude,
-		flightPlan.ArrivalAirport, flightPlan.RouteTime/100, flightPlan.RouteTime%100, flightPlan.FuelTime/100,
-		flightPlan.FuelTime%100, flightPlan.AlternateAirport, flightPlan.Remarks, flightPlan.Route)
+		flightPlan.ArrivalAirport, flightPlan.RouteTimeHour, flightPlan.RouteTimeMinute, flightPlan.FuelTimeHour,
+		flightPlan.FuelTimeMinute, flightPlan.AlternateAirport, flightPlan.Remarks, flightPlan.Route)
 }

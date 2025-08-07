@@ -139,14 +139,14 @@ var (
 	RemoveAtc       = ClientCommand("#DA")
 	AddPilot        = ClientCommand("#AP")
 	RemovePilot     = ClientCommand("#DP")
-	RequestHandoff  = ClientCommand("#HO")
-	AcceptHandoff   = ClientCommand("#HA")
 	ProController   = ClientCommand("#PC")
 	PilotPosition   = ClientCommand("@")
 	AtcPosition     = ClientCommand("%")
 	AtcSubVisPoint  = ClientCommand("'")
 	Message         = ClientCommand("#TM")
 	WindDelta       = ClientCommand("#DL")
+	RequestHandoff  = ClientCommand("$HO")
+	AcceptHandoff   = ClientCommand("$HA")
 	Ping            = ClientCommand("$PI")
 	Pong            = ClientCommand("$PO")
 	Plan            = ClientCommand("$FP")
@@ -196,10 +196,6 @@ func (b BroadcastTarget) Index() int {
 	return 0
 }
 
-type SpecialFrequency int
-
 var (
-	SimulatorFrequency SpecialFrequency = 94835
+	specialFrequency = 94835
 )
-
-var specialFrequencies = []SpecialFrequency{SimulatorFrequency}

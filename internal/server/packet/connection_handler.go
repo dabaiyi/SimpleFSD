@@ -21,11 +21,6 @@ type ConnectionHandler struct {
 	User   *database.User
 }
 
-func (c *ConnectionHandler) SendLine(line []byte) {
-	logger.DebugF("[%s] -> %s", c.ConnId, line)
-	_, _ = c.Conn.Write(line)
-}
-
 func (c *ConnectionHandler) SendError(result *Result) {
 	if result.success {
 		return
@@ -36,7 +31,7 @@ func (c *ConnectionHandler) SendError(result *Result) {
 	} else {
 		packet = makePacket(Error, "server", "unknown", fmt.Sprintf("%03d", result.errno.Index()), result.env, result.errno.String())
 	}
-	c.SendLine(packet)
+	c.Client.SendLine(packet)
 	if result.fatal {
 		time.AfterFunc(100*time.Millisecond, func() {
 			_ = c.Conn.Close()
@@ -63,7 +58,11 @@ func (c *ConnectionHandler) HandleConnection() {
 	scanner.Split(createSplitFunc(splitSign))
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		logger.DebugF("[%s] <- %s", c.ConnId, line)
+		if c.Client != nil {
+			logger.DebugF("[%s](%s) -> %s", c.Client.Callsign, c.ConnId, line)
+		} else {
+			logger.DebugF("[%s] -> %s", c.ConnId, line)
+		}
 		c.handleLine(line)
 	}
 

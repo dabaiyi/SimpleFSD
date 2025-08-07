@@ -17,6 +17,7 @@ type Config struct {
 	MaxBroadcastWorkers  int           `json:"max_broadcast_workers"` // 广播并发线程数
 	SessionCleanTime     string        `json:"session_clean_time"`    // 会话保留时间
 	SessionCleanDuration time.Duration `json:"-"`                     // 内部使用字段
+	SimulatorServer      bool          `json:"simulator_server"`      // 是否为模拟机服务器
 	ServerConfig         struct {
 		Host              string        `json:"host"`
 		Port              uint64        `json:"port"`

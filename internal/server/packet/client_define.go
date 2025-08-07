@@ -25,7 +25,7 @@ type Client struct {
 	Callsign       string
 	Rating         Rating
 	Facility       Facility
-	Cid            database.UserId
+	User           *database.User
 	Protocol       int
 	RealName       string
 	Socket         net.Conn
@@ -45,10 +45,10 @@ type Client struct {
 	lock           sync.Mutex
 }
 
-func NewClient(callsign string, rating Rating, cid database.UserId, protocol int, realName string, socket net.Conn, isAtc bool) *Client {
+func NewClient(callsign string, rating Rating, user *database.User, protocol int, realName string, socket net.Conn, isAtc bool) *Client {
 	var flightPlan *database.FlightPlan = nil
 	if !isAtc {
-		flightPlan, _ = database.GetFlightPlan(callsign)
+		flightPlan, _ = database.GetFlightPlan(user.Cid, callsign)
 	} else {
 		flightPlan = nil
 	}
@@ -57,7 +57,7 @@ func NewClient(callsign string, rating Rating, cid database.UserId, protocol int
 		Callsign:       callsign,
 		Rating:         rating,
 		Facility:       0,
-		Cid:            cid,
+		User:           user,
 		Protocol:       protocol,
 		RealName:       realName,
 		Socket:         socket,
@@ -128,7 +128,7 @@ func (c *Client) MarkedDisconnect() {
 
 func (c *Client) UpdateFlightPlan(flightPlanData []string) error {
 	if c.FlightPlan == nil {
-		flightPlan, err := database.CreateFlightPlan(c.Callsign, flightPlanData)
+		flightPlan, err := database.CreateFlightPlan(c.User, c.Callsign, flightPlanData)
 		if err != nil {
 			return err
 		}
@@ -142,7 +142,7 @@ func (c *Client) UpdateFlightPlan(flightPlanData []string) error {
 			c.FlightPlan.Locked = false
 		}
 	}
-	err := c.FlightPlan.UpdateFlightPlan(flightPlanData)
+	err := c.FlightPlan.UpdateFlightPlan(flightPlanData, false)
 	return err
 }
 
@@ -190,9 +190,21 @@ func (c *Client) SendError(result *Result) {
 	}
 
 	packet := makePacket(Error, "server", c.Callsign, fmt.Sprintf("%03d", result.errno.Index()), result.env, result.errno.String())
-	_, _ = c.Socket.Write(packet)
+	c.SendLine(packet)
 	if result.fatal {
 		_ = c.Socket.Close()
+	}
+}
+
+func (c *Client) SendLine(line []byte) {
+	if !bytes.HasSuffix(line, splitSign) {
+		logger.DebugF("[%s] <- %s", c.Callsign, line)
+		line = append(line, splitSign...)
+	} else {
+		logger.DebugF("[%s] <- %s", c.Callsign, line[:len(line)-splitSignLen])
+	}
+	if c.Socket != nil {
+		_, _ = c.Socket.Write(line)
 	}
 }
 
@@ -211,6 +223,5 @@ func (c *Client) SendMotd() {
 		buffer.Write(msg)
 	}
 	c.motdBytes = buffer.Bytes()
-	logger.DebugF("[%s] -> %s", c.Callsign, c.motdBytes)
-	_, _ = c.Socket.Write(c.motdBytes)
+	c.SendLine(c.motdBytes)
 }
