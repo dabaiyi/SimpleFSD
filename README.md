@@ -1,7 +1,7 @@
 # fsd-server
 
-一个用于模拟飞行联飞的FSD, 使用Go语言编写
-FSD支持计划同步, 计划锁定, 网页计划提交
+一个用于模拟飞行联飞的FSD, 使用Go语言编写  
+FSD支持计划同步, 计划锁定, 网页计划提交  
 
 [![GitHub release](https://img.shields.io/github/v/release/Flyleague-Collection/fsd-server)](https://www.github.com/Flyleague-Collection/fsd-server/releases/latest)
 ![GitHub commits since latest release](https://img.shields.io/github/commits-since/Flyleague-Collection/fsd-server/latest/main)
