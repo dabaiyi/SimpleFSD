@@ -18,17 +18,26 @@ jobs:
           go-version: '1.23.4'
 
       - name: Build Linux
-        run: go build -o fsd-server-linux-nightly .\cmd\fsd-server\
+        run: go build -o fsd-server-linux-nightly -v ./cmd/fsd-server/
 
       - name: Build Windows
-        run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o fsd-server-windows-amd64-nightly .\cmd\fsd-server\
+        run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o fsd-server-windows-amd64-nightly ./cmd/fsd-server/
+
+      - name: Run UPX
+        uses: crazy-max/ghaction-upx@v3
+        with:
+          version: latest
+          files: |
+            ./fsd-server-linux-nightly
+            ./fsd-server-windows-amd64-nightly.exe
+          args: -fq -9
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-nightly
-          path: .\fsd-server-linux-nightly
+          path: ./fsd-server-linux-nightly
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-nightly
-          path: .\fsd-server-windows-amd64-nightly.exe
+          path: ./fsd-server-windows-amd64-nightly.exe
