@@ -1,8 +1,8 @@
 package packet
 
 import (
-	c "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/utils"
+	c "github.com/half-nothing/fsd-server/internal/config"
+	"github.com/half-nothing/fsd-server/internal/utils"
 )
 
 type Enum interface {

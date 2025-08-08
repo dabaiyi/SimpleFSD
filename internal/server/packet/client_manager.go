@@ -3,7 +3,7 @@ package packet
 import (
 	"context"
 	"fmt"
-	c "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
+	c "github.com/half-nothing/fsd-server/internal/config"
 	"math/rand"
 	"strconv"
 	"sync"

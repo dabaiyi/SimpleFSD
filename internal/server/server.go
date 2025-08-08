@@ -2,8 +2,8 @@ package server
 
 import (
 	. "fmt"
-	c "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server/packet"
+	c "github.com/half-nothing/fsd-server/internal/config"
+	"github.com/half-nothing/fsd-server/internal/server/packet"
 	"net"
 )
 

@@ -3,7 +3,7 @@ package database
 import (
 	"context"
 	. "fmt"
-	c "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
+	c "github.com/half-nothing/fsd-server/internal/config"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

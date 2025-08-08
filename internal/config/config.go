@@ -17,12 +17,13 @@ type Config struct {
 	MaxBroadcastWorkers  int           `json:"max_broadcast_workers"` // 广播并发线程数
 	SessionCleanTime     string        `json:"session_clean_time"`    // 会话保留时间
 	SessionCleanDuration time.Duration `json:"-"`                     // 内部使用字段
-	SimulatorServer      bool          `json:"simulator_server"`      // 是否为模拟机服务器
 	ServerConfig         struct {
 		Host              string        `json:"host"`
 		Port              uint64        `json:"port"`
 		EnableGRPC        bool          `json:"enable_grpc"`
 		GRPCPort          uint64        `json:"grpc_port"`
+		GRPCCacheTime     string        `json:"grpc_cache_time"`
+		GRPCCacheDuration time.Duration `json:"-"`
 		HeartbeatInterval string        `json:"heartbeat_interval"`
 		HeartbeatDuration time.Duration `json:"-"`
 		Motd              []string      `json:"motd"`
@@ -75,6 +76,11 @@ func ReadConfig() (*Config, error) {
 	}
 
 	config.SessionCleanDuration, err = time.ParseDuration(config.SessionCleanTime)
+	if err != nil {
+		return nil, fmt.Errorf("time duration could not be parsed correctly, %v", err)
+	}
+
+	config.ServerConfig.GRPCCacheDuration, err = time.ParseDuration(config.ServerConfig.GRPCCacheTime)
 	if err != nil {
 		return nil, fmt.Errorf("time duration could not be parsed correctly, %v", err)
 	}

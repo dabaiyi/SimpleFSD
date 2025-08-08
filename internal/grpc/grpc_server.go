@@ -1,7 +1,7 @@
 package __
 
 import (
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server/packet"
+	"github.com/half-nothing/fsd-server/internal/server/packet"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"sync"
@@ -12,18 +12,21 @@ type GrpcServer struct {
 	generateTime time.Time
 	onlineClient *OnlineClient
 	mu           sync.RWMutex
+	queryCache   time.Duration
 }
 
-func NewGrpcServer() *GrpcServer {
+func NewGrpcServer(queryCache time.Duration) *GrpcServer {
 	return &GrpcServer{
 		generateTime: time.Now(),
 		onlineClient: nil,
+		mu:           sync.RWMutex{},
+		queryCache:   queryCache,
 	}
 }
 
 func (s *GrpcServer) GetOnlineClient(_ context.Context, _ *Empty) (*OnlineClient, error) {
 	s.mu.RLock()
-	if s.onlineClient != nil && time.Since(s.generateTime) <= 15*time.Second {
+	if s.onlineClient != nil && time.Since(s.generateTime) <= s.queryCache {
 		defer s.mu.RUnlock()
 		return s.onlineClient, nil
 	}
@@ -32,7 +35,7 @@ func (s *GrpcServer) GetOnlineClient(_ context.Context, _ *Empty) (*OnlineClient
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.onlineClient != nil && time.Since(s.generateTime) <= 15*time.Second {
+	if s.onlineClient != nil && time.Since(s.generateTime) <= s.queryCache {
 		return s.onlineClient, nil
 	}
 

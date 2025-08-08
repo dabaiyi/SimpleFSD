@@ -2,7 +2,7 @@ package packet
 
 import (
 	"fmt"
-	logger "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
+	logger "github.com/half-nothing/fsd-server/internal/config"
 	"time"
 )
 

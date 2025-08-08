@@ -2,9 +2,9 @@ package packet
 
 import (
 	"fmt"
-	logger "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server/database"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/utils"
+	logger "github.com/half-nothing/fsd-server/internal/config"
+	"github.com/half-nothing/fsd-server/internal/server/database"
+	"github.com/half-nothing/fsd-server/internal/utils"
 	"strings"
 	"time"
 )
@@ -189,6 +189,9 @@ func (c *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *Re
 			targetCallsign := data[3]
 			client, err := clientManager.GetClient(targetCallsign)
 			if err != nil {
+				return ResultError(NoFlightPlan, false, c.Client.Callsign)
+			}
+			if client.FlightPlan == nil {
 				return ResultError(NoFlightPlan, false, c.Client.Callsign)
 			}
 			c.Client.SendLine([]byte(client.FlightPlan.ToString(data[0])))

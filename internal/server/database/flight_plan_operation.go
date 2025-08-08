@@ -3,19 +3,15 @@ package database
 import (
 	"context"
 	"fmt"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/utils"
+	"github.com/half-nothing/fsd-server/internal/utils"
 )
 
-func GetFlightPlan(cid int, callsign string) (*FlightPlan, error) {
+func GetFlightPlan(cid int) (*FlightPlan, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	flightPlan := FlightPlan{}
 	var err error
-	if config.SimulatorServer {
-		err = database.WithContext(ctx).Where("callsign=?", callsign).First(&flightPlan).Error
-	} else {
-		err = database.WithContext(ctx).Where("cid=?", cid).First(&flightPlan).Error
-	}
+	err = database.WithContext(ctx).Where("cid=?", cid).First(&flightPlan).Error
 	if err != nil {
 		return nil, err
 	}

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	logger "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server/database"
+	logger "github.com/half-nothing/fsd-server/internal/config"
+	"github.com/half-nothing/fsd-server/internal/server/database"
 	"net"
 	"sync"
 	"time"
@@ -48,7 +48,7 @@ type Client struct {
 func NewClient(callsign string, rating Rating, user *database.User, protocol int, realName string, socket net.Conn, isAtc bool) *Client {
 	var flightPlan *database.FlightPlan = nil
 	if !isAtc {
-		flightPlan, _ = database.GetFlightPlan(user.Cid, callsign)
+		flightPlan, _ = database.GetFlightPlan(user.Cid)
 	} else {
 		flightPlan = nil
 	}

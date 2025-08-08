@@ -3,8 +3,8 @@ package packet
 import (
 	"bufio"
 	"fmt"
-	logger "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server/database"
+	logger "github.com/half-nothing/fsd-server/internal/config"
+	"github.com/half-nothing/fsd-server/internal/server/database"
 	"net"
 	"time"
 )

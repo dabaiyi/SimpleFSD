@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	c "github.com/Skylite-Dev-Team/skylite-fsd/internal/config"
-	__ "github.com/Skylite-Dev-Team/skylite-fsd/internal/grpc"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server/database"
-	"github.com/Skylite-Dev-Team/skylite-fsd/internal/server/packet"
+	c "github.com/half-nothing/fsd-server/internal/config"
+	__ "github.com/half-nothing/fsd-server/internal/grpc"
+	"github.com/half-nothing/fsd-server/internal/server"
+	"github.com/half-nothing/fsd-server/internal/server/database"
+	"github.com/half-nothing/fsd-server/internal/server/packet"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"net"
@@ -37,7 +37,7 @@ func main() {
 			return
 		}
 		grpcServer := grpc.NewServer()
-		__.RegisterServerStatusServer(grpcServer, __.NewGrpcServer())
+		__.RegisterServerStatusServer(grpcServer, __.NewGrpcServer(config.ServerConfig.GRPCCacheDuration))
 		reflection.Register(grpcServer)
 		cleaner.Add(__.NewGrpcShutdownCallback(grpcServer))
 		go func() {
