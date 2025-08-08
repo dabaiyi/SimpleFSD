@@ -1,10 +1,12 @@
 # fsd-server
 
 一个用于模拟飞行联飞的FSD, 使用Go语言编写  
-FSD支持计划同步, 计划锁定, 网页计划提交  
+FSD支持计划同步, 计划锁定, 网页计划提交
 
 [![GitHub release](https://img.shields.io/github/v/release/Flyleague-Collection/fsd-server)](https://www.github.com/Flyleague-Collection/fsd-server/releases/latest)
-![GitHub commits since latest release](https://img.shields.io/github/commits-since/Flyleague-Collection/fsd-server/latest/main)
+![GitHub Release Date](https://img.shields.io/github/release-date/Flyleague-Collection/fsd-server?display_date=published_at)  
+![GitHub last commit](https://img.shields.io/github/last-commit/Flyleague-Collection/fsd-server?display_timestamp=committer)
+![Build](https://img.shields.io/github/actions/workflow/status/Flyleague-Collection/fsd-server/go-build.yml)  
 ![GitHub top language](https://img.shields.io/github/languages/top/Flyleague-Collection/fsd-server)
 ![MIT](https://img.shields.io/badge/License-MIT-blue)
 
@@ -26,6 +28,7 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 7. Enjoy
 
 ### 配置文件简介
+
 ```json5
 {
   // 调试模式, 打开后会有大量日志输出, 请不要在生产环境打开
