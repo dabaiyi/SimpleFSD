@@ -3,12 +3,38 @@ package server
 import (
 	. "fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
+	__ "github.com/half-nothing/fsd-server/internal/grpc"
 	"github.com/half-nothing/fsd-server/internal/server/packet"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 	"net"
 )
 
-// StartServer 启动MQTT服务器
-func StartServer() {
+func StartHttpServer() {
+
+}
+
+func StartGRPCServer() {
+	config, _ := c.GetConfig()
+	ln, err := net.Listen("tcp", Sprintf("%s:%d", config.ServerConfig.Host, config.ServerConfig.GRPCPort))
+	if err != nil {
+		c.FatalF("Fail to open grpc port: %v", err)
+		return
+	}
+	grpcServer := grpc.NewServer()
+	__.RegisterServerStatusServer(grpcServer, __.NewGrpcServer(config.ServerConfig.GRPCCacheDuration))
+	reflection.Register(grpcServer)
+	c.NewCleaner().Add(__.NewGrpcShutdownCallback(grpcServer))
+	c.InfoF("GRPC server listen on %s", ln.Addr().String())
+	err = grpcServer.Serve(ln)
+	if err != nil {
+		c.FatalF("grpc failed to serve: %v", err)
+		return
+	}
+}
+
+// StartFSDServer 启动FSD服务器
+func StartFSDServer() {
 	config, _ := c.GetConfig()
 
 	// 初始化客户端管理器

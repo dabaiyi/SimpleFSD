@@ -7,7 +7,7 @@ type Result struct {
 	env     string
 }
 
-func ResultSuccess() *Result {
+func resultSuccess() *Result {
 	return &Result{
 		success: true,
 		errno:   Ok,
@@ -16,7 +16,7 @@ func ResultSuccess() *Result {
 	}
 }
 
-func ResultError(errno ClientError, fatal bool, env string) *Result {
+func resultError(errno ClientError, fatal bool, env string) *Result {
 	return &Result{
 		success: false,
 		errno:   errno,

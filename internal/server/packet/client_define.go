@@ -7,6 +7,7 @@ import (
 	logger "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
 	"net"
+	"slices"
 	"sync"
 	"time"
 )
@@ -87,7 +88,7 @@ func (c *Client) Delete() {
 	defer c.lock.Unlock()
 
 	if c.disconnect {
-		logger.DebugF("[%s] Client session deleted", c.Callsign)
+		logger.InfoF("[%s] Client session deleted", c.Callsign)
 		_ = clientManager.DeleteClient(c.Callsign)
 	}
 }
@@ -100,7 +101,7 @@ func (c *Client) Reconnect(socket net.Conn) bool {
 		return false
 	}
 
-	logger.DebugF("[%s] Client reconnected", c.Callsign)
+	logger.InfoF("[%s] Client reconnected", c.Callsign)
 
 	c.reconnectTimer.Stop()
 	c.disconnect = false
@@ -228,4 +229,12 @@ func (c *Client) SendMotd() {
 	}
 	c.motdBytes = buffer.Bytes()
 	c.SendLine(c.motdBytes)
+}
+
+func (c *Client) CheckFacility(facility Facility) bool {
+	return facility.CheckFacility(c.Facility)
+}
+
+func (c *Client) CheckRating(rating []Rating) bool {
+	return slices.Contains(rating, c.Rating)
 }

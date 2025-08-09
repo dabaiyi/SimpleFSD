@@ -100,7 +100,10 @@ func (f Facility) CheckFacility(facility Facility) bool {
 	return f&facility != 0
 }
 
-var allowEditPlanFacility = DEL | GND | TWR | APP | CTR | FSS
+const allowAtcFacility = DEL | GND | TWR | APP | CTR | FSS
+
+var allowKillRating = []Rating{Supervisor, Administrator}
+
 var ratingFacilityMap = map[Rating]Facility{
 	Ban:           0,
 	Normal:        Pilot,
@@ -196,6 +199,4 @@ func (b BroadcastTarget) Index() int {
 	return 0
 }
 
-var (
-	specialFrequency = 94835
-)
+const specialFrequency = "@94835"

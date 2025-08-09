@@ -21,7 +21,7 @@ type User struct {
 
 type FlightPlan struct {
 	ID               uint   `gorm:"primarykey"`
-	Cid              int    `gorm:"uniqueIndex"`
+	Cid              int    `gorm:"index"`
 	Callsign         string `gorm:"size:16;uniqueIndex"`
 	FlightType       string `gorm:"size:4"`
 	AircraftType     string `gorm:"size:16"`

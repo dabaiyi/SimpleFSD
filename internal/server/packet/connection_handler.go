@@ -33,7 +33,7 @@ func (c *ConnectionHandler) SendError(result *Result) {
 	}
 	c.Client.SendLine(packet)
 	if result.fatal {
-		time.AfterFunc(100*time.Millisecond, func() {
+		time.AfterFunc(time.Second, func() {
 			_ = c.Conn.Close()
 		})
 	}
@@ -41,7 +41,7 @@ func (c *ConnectionHandler) SendError(result *Result) {
 
 func (c *ConnectionHandler) handleLine(line []byte) {
 	command, data := parserCommandLine(line)
-	result := c.HandleCommand(command, data, line)
+	result := c.handleCommand(command, data, line)
 	if !result.success {
 		c.SendError(result)
 	}
@@ -71,7 +71,7 @@ func (c *ConnectionHandler) HandleConnection() {
 	}
 
 	if c.Client != nil {
-		logger.DebugF("[%s] Disconnected, session will be saved for %s", c.Client.Callsign, config.SessionCleanDuration.String())
+		logger.InfoF("[%s] Disconnected, session will be saved for %s", c.Client.Callsign, config.SessionCleanDuration.String())
 		c.Client.MarkedDisconnect()
 	}
 }

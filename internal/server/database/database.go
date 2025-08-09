@@ -4,10 +4,8 @@ import (
 	"context"
 	. "fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"net/url"
 	"time"
 )
 
@@ -40,15 +38,7 @@ func ConnectDatabase() error {
 	config, _ = c.GetConfig()
 	queryTimeout = config.DatabaseConfig.QueryDuration
 
-	encodedUser := url.QueryEscape(config.DatabaseConfig.Username)
-	encodedPass := url.QueryEscape(config.DatabaseConfig.Password)
-	dsn := Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True",
-		encodedUser,
-		encodedPass,
-		config.DatabaseConfig.Host,
-		config.DatabaseConfig.Port,
-		config.DatabaseConfig.Database,
-	)
+	connection := config.DatabaseConfig.DBType.GetConnection()
 
 	connectionConfig := gorm.Config{}
 	connectionConfig.DefaultTransactionTimeout = 5 * time.Second
@@ -60,7 +50,7 @@ func ConnectDatabase() error {
 		connectionConfig.Logger = logger.Default.LogMode(logger.Silent)
 	}
 
-	db, err := gorm.Open(mysql.Open(dsn), &connectionConfig)
+	db, err := gorm.Open(connection, &connectionConfig)
 	if err != nil {
 		return Errorf("error occured while connecting to database: %v", err)
 	}

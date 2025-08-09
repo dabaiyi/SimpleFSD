@@ -4,8 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"net/url"
 	"os"
 	"runtime"
+	"slices"
 	"time"
 )
 
@@ -29,11 +35,14 @@ type Config struct {
 		Motd              []string      `json:"motd"`
 	} `json:"server_config"`
 	DatabaseConfig struct {
+		Type                 string        `json:"type"`
+		DBType               DatabaseType  `json:"-"`
 		Host                 string        `json:"host"`
 		Port                 int           `json:"port"`
 		Username             string        `json:"username"`
 		Password             string        `json:"password"`
 		Database             string        `json:"database"`
+		EnableSSL            bool          `json:"enable_ssl"`
 		ConnectIdleTimeout   string        `json:"connect_idle_timeout"` // 连接空闲超时时间
 		ConnectIdleDuration  time.Duration `json:"-"`
 		QueryTimeout         string        `json:"connect_timeout"` // 每次查询超时时间
@@ -43,9 +52,18 @@ type Config struct {
 	RatingConfig map[string]int `json:"rating_config"`
 }
 
+type DatabaseType string
+
+const (
+	MySQL      DatabaseType = "mysql"
+	PostgreSQL DatabaseType = "postgres"
+	SQLite     DatabaseType = "sqlite3"
+)
+
 var (
-	config      Config
-	initialized = false
+	config              Config
+	initialized         = false
+	allowedDatabaseType = []DatabaseType{MySQL, PostgreSQL, SQLite}
 )
 
 // ReadConfig 从配置文件读取配置
@@ -69,7 +87,11 @@ func ReadConfig() (*Config, error) {
 		return nil, fmt.Errorf("the configuration file does not contain valid JSON, %v", err)
 	}
 
-	initialized = true
+	config.DatabaseConfig.DBType = DatabaseType(config.DatabaseConfig.Type)
+
+	if !slices.Contains(allowedDatabaseType, config.DatabaseConfig.DBType) {
+		return nil, fmt.Errorf("database type %s is not allowed, support database is %v, please check the configuration file", config.DatabaseConfig.DBType, allowedDatabaseType)
+	}
 
 	if config.MaxBroadcastWorkers > runtime.NumCPU()*50 {
 		config.MaxBroadcastWorkers = runtime.NumCPU() * 50
@@ -100,6 +122,7 @@ func ReadConfig() (*Config, error) {
 		return nil, fmt.Errorf("time duration could not be parsed correctly, %v", err)
 	}
 
+	initialized = true
 	return &config, nil
 }
 
@@ -129,4 +152,61 @@ func GetConfig() (*Config, error) {
 		return &config, nil
 	}
 	return ReadConfig()
+}
+
+func (dbt DatabaseType) GetConnection() gorm.Dialector {
+	switch dbt {
+	case MySQL:
+		return mySQLConnection()
+	case PostgreSQL:
+		return postgreSQLConnection()
+	case SQLite:
+		return sqliteConnection()
+	default:
+		return nil
+	}
+}
+
+func mySQLConnection() gorm.Dialector {
+	encodedUser := url.QueryEscape(config.DatabaseConfig.Username)
+	encodedPass := url.QueryEscape(config.DatabaseConfig.Password)
+	var enableSSL string
+	if config.DatabaseConfig.EnableSSL {
+		enableSSL = "true"
+	} else {
+		enableSSL = "false"
+	}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&tls=%s",
+		encodedUser,
+		encodedPass,
+		config.DatabaseConfig.Host,
+		config.DatabaseConfig.Port,
+		config.DatabaseConfig.Database,
+		enableSSL,
+	)
+	return mysql.Open(dsn)
+}
+
+func postgreSQLConnection() gorm.Dialector {
+	encodedUser := url.QueryEscape(config.DatabaseConfig.Username)
+	encodedPass := url.QueryEscape(config.DatabaseConfig.Password)
+	var enableSSL string
+	if config.DatabaseConfig.EnableSSL {
+		enableSSL = "enable"
+	} else {
+		enableSSL = "disable"
+	}
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=Asia/Shanghai",
+		config.DatabaseConfig.Host,
+		encodedUser,
+		encodedPass,
+		config.DatabaseConfig.Database,
+		config.DatabaseConfig.Port,
+		enableSSL,
+	)
+	return postgres.Open(dsn)
+}
+
+func sqliteConnection() gorm.Dialector {
+	return sqlite.Open(config.DatabaseConfig.Database)
 }
