@@ -16,7 +16,7 @@ func (id IntUserId) GetUser() (*User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	user := User{}
-	if err := database.WithContext(ctx).Where("cid = ?", id, id).First(&user).Error; err != nil {
+	if err := database.WithContext(ctx).Where("cid = ?", id).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
@@ -53,11 +53,23 @@ func AddUser(user *User) error {
 	return database.WithContext(ctx).Create(user).Error
 }
 
+func (user *User) AddAtcTime(seconds int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return database.WithContext(ctx).Model(user).Update("total_atc_time", user.TotalAtcTime+seconds).Error
+}
+
+func (user *User) AddPilotTime(seconds int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return database.WithContext(ctx).Model(user).Update("total_pilot_time", user.TotalPilotTime+seconds).Error
+}
+
 func (user *User) Save() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).Save(&user).Error
+	err := database.WithContext(ctx).Save(user).Error
 	return err
 }
 

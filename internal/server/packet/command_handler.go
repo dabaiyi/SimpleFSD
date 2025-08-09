@@ -14,9 +14,9 @@ import (
 func getUserId(cid string) database.UserId {
 	id := utils.StrToInt(cid, -1)
 	if id != -1 {
-		return database.IntId(id)
+		return database.IntUserId(id)
 	}
-	return database.StringId(cid)
+	return database.StringUserId(cid)
 }
 
 // verifyUserInfo 验证用户信息与处理客户端重连机制
@@ -125,7 +125,8 @@ func (c *ConnectionHandler) handleAddPilot(data []string, rawLine []byte) *Resul
 	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	c.Client.SendMotd()
 	logger.InfoF("[%s] Client login successfully", callsign)
-	if c.Client.FlightPlan != nil && c.Client.FlightPlan.FromWeb && callsign != c.Client.FlightPlan.Callsign {
+	if !config.Server.General.SimulatorServer && c.Client.FlightPlan != nil &&
+		c.Client.FlightPlan.FromWeb && callsign != c.Client.FlightPlan.Callsign {
 		c.Client.SendLine(makePacket(Message, "FPlanManager", callsign,
 			fmt.Sprintf("Seems you are connect with callsign(%s), "+
 				"but we found a flightplan submit by web which has callsign(%s), "+
@@ -151,6 +152,9 @@ func (c *ConnectionHandler) handleAtcPosUpdate(data []string, rawLine []byte) *R
 	visualRange := utils.StrToFloat(data[3], 0)
 	latitude := utils.StrToFloat(data[5], 0)
 	longitude := utils.StrToFloat(data[6], 0)
+	if c.Client == nil {
+		return resultError(Syntax, false, "")
+	}
 	c.Client.UpdateAtcPos(frequency, facility, visualRange, latitude, longitude)
 	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	return resultSuccess()
@@ -168,6 +172,9 @@ func (c *ConnectionHandler) handlePilotPosUpdate(data []string, rawLine []byte) 
 	longitude := utils.StrToFloat(data[5], 0)
 	altitude := utils.StrToInt(data[6], 0)
 	groundSpeed := utils.StrToInt(data[7], 0)
+	if c.Client == nil {
+		return resultError(Syntax, false, "")
+	}
 	c.Client.UpdatePilotPos(transponder, latitude, longitude, altitude, groundSpeed)
 	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	return resultSuccess()
@@ -183,12 +190,18 @@ func (c *ConnectionHandler) handleAtcVisPointUpdate(data []string, _ []byte) *Re
 	visPos := utils.StrToInt(data[1], 0)
 	latitude := utils.StrToFloat(data[2], 0)
 	longitude := utils.StrToFloat(data[3], 0)
+	if c.Client == nil {
+		return resultError(Syntax, false, "")
+	}
 	_ = c.Client.UpdateAtcVisPoint(visPos, latitude, longitude)
 	return resultSuccess()
 }
 
 // sendFrequencyMessage 发送频率消息
 func (c *ConnectionHandler) sendFrequencyMessage(targetStation string, rawLine []byte) (result *Result) {
+	if c.Client == nil {
+		return resultError(Syntax, false, "")
+	}
 	frequency := utils.StrToInt(targetStation[1:], -1)
 	if frequency == -1 {
 		result = resultError(Syntax, false, c.Client.Callsign)
@@ -212,6 +225,9 @@ func (c *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *Re
 	//	修改飞行计划
 	//	$CQ ZYSH_CTR @94835 FA  CPA421 31100
 	//	[0] [  1   ] [  2 ] [3] [  4 ] [ 5 ]
+	if c.Client == nil {
+		return resultError(Syntax, false, "")
+	}
 	commandLength := len(data)
 	if commandLength < 3 {
 		return resultError(Syntax, false, c.Client.Callsign)
@@ -270,6 +286,9 @@ func (c *ConnectionHandler) handleClientResponse(data []string, rawLine []byte) 
 	//  [0] [   1  ] [   2  ] [ 3] [   4   ] [  5   ] [    6    ] [     7      ] [   8   ] [     9   ] [  10  ]
 	//	$CR ZSHA_CTR SERVER ATIS  T  ZSHA_CTR Shanghai Control
 	//	[0] [   1  ] [  2 ] [ 3] [4] [           5           ]
+	if c.Client == nil {
+		return resultError(Syntax, false, "")
+	}
 	commandLength := len(data)
 	if commandLength < 3 {
 		return resultError(Syntax, false, "")
@@ -316,6 +335,9 @@ func (c *ConnectionHandler) handlePlan(data []string, rawLine []byte) *Result {
 	// [0] [  1 ] [  2 ] [3] [  4   ] [5] [ 6] [ 7] [8] [ 9 ] [10] [11] [12] [13] [14] [15]
 	// /V/ SEL/AHFL VENOS A588 NULRA W206 MAGBI W656 ISLUK W629 LARUN
 	// [    16    ] [                      17                       ]
+	if c.Client == nil {
+		return resultError(Syntax, false, "")
+	}
 	if c.Client.IsAtc {
 		return resultError(Syntax, false, c.Client.Callsign)
 	}
@@ -338,6 +360,9 @@ func (c *ConnectionHandler) handleAtcEditPlan(data []string, _ []byte) *Result {
 	// [0] [   1  ] [  2 ] [  3 ] [4] [   5  ] [6] [ 7] [ 8] [9] [ 10] [11] [12] [13] [14] [15] [16]
 	// /V/ SEL/AHFL CHI19D/28 VENOS A588 NULRA W206 MAGBI W656 ISLUK W629 LARUN
 	// [     17   ] [                             18                          ]
+	if c.Client == nil {
+		return resultError(Syntax, false, "")
+	}
 	if !c.Client.IsAtc {
 		return resultError(Syntax, false, c.Client.Callsign)
 	}
@@ -356,7 +381,9 @@ func (c *ConnectionHandler) handleAtcEditPlan(data []string, _ []byte) *Result {
 	if client.FlightPlan == nil {
 		return resultError(NoFlightPlan, false, c.Client.Callsign)
 	}
-	client.FlightPlan.Locked = true
+	if !config.Server.General.SimulatorServer {
+		client.FlightPlan.Locked = true
+	}
 	err = client.FlightPlan.UpdateFlightPlan(data[1:], true)
 	if err != nil {
 		return resultError(Syntax, false, c.Client.Callsign)
@@ -368,6 +395,9 @@ func (c *ConnectionHandler) handleAtcEditPlan(data []string, _ []byte) *Result {
 
 func (c *ConnectionHandler) handleKillClient(data []string, _ []byte) *Result {
 	// $!! ZSHA_CTR CPA421 test
+	if c.Client == nil {
+		return resultError(Syntax, false, "")
+	}
 	if !(c.Client.IsAtc && c.Client.CheckRating(allowKillRating)) {
 		return resultError(Syntax, false, c.Client.Callsign)
 	}
@@ -382,7 +412,7 @@ func (c *ConnectionHandler) handleKillClient(data []string, _ []byte) *Result {
 	}
 	time.AfterFunc(time.Second, func() {
 		_ = client.Socket.Close()
-		client.MarkedDisconnect()
+		client.MarkedDisconnect(false)
 	})
 	return resultSuccess()
 }

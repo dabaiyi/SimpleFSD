@@ -1,7 +1,6 @@
 package server
 
 import (
-	. "fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	__ "github.com/half-nothing/fsd-server/internal/grpc"
 	"github.com/half-nothing/fsd-server/internal/server/packet"
@@ -16,13 +15,13 @@ func StartHttpServer() {
 
 func StartGRPCServer() {
 	config, _ := c.GetConfig()
-	ln, err := net.Listen("tcp", Sprintf("%s:%d", config.ServerConfig.Host, config.ServerConfig.GRPCPort))
+	ln, err := net.Listen("tcp", config.Server.GRPCServer.Address)
 	if err != nil {
 		c.FatalF("Fail to open grpc port: %v", err)
 		return
 	}
 	grpcServer := grpc.NewServer()
-	__.RegisterServerStatusServer(grpcServer, __.NewGrpcServer(config.ServerConfig.GRPCCacheDuration))
+	__.RegisterServerStatusServer(grpcServer, __.NewGrpcServer(config.Server.GRPCServer.CacheDuration))
 	reflection.Register(grpcServer)
 	c.NewCleaner().Add(__.NewGrpcShutdownCallback(grpcServer))
 	c.InfoF("GRPC server listen on %s", ln.Addr().String())
@@ -41,8 +40,8 @@ func StartFSDServer() {
 	_ = packet.GetClientManager()
 
 	// 创建TCP监听器
-	sem := make(chan struct{}, config.MaxWorkers)
-	ln, err := net.Listen("tcp", Sprintf("%s:%d", config.ServerConfig.Host, config.ServerConfig.Port))
+	sem := make(chan struct{}, config.Server.FSDServer.MaxWorkers)
+	ln, err := net.Listen("tcp", config.Server.FSDServer.Address)
 	if err != nil {
 		c.FatalF("FSD Server Start error: %v", err)
 	}

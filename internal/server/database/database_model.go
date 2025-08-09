@@ -54,7 +54,7 @@ type History struct {
 	Callsign   string `gorm:"size:16;uniqueIndex"`
 	StartTime  time.Time
 	EndTime    time.Time
-	OnlineTIme int
+	OnlineTime int
 	IsAtc      bool
 	CreatedAt  time.Time
 	UpdatedAt  time.Time

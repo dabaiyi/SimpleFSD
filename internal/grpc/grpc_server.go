@@ -68,7 +68,7 @@ func (s *GrpcServer) GetOnlineClient(_ context.Context, _ *Empty) (*OnlineClient
 				Facility:   client.Facility.String(),
 				Frequency:  int32(client.Frequency + 100000),
 				AtcInfo:    client.AtisInfo,
-				OnlineTime: client.OnlineTime.Unix(),
+				OnlineTime: client.History.StartTime.Unix(),
 			}
 			s.onlineClient.OnlineAtc = append(s.onlineClient.OnlineAtc, atcInfo)
 		} else {
@@ -84,7 +84,7 @@ func (s *GrpcServer) GetOnlineClient(_ context.Context, _ *Empty) (*OnlineClient
 				Transponder: int32(client.Transponder),
 				Altitude:    int32(client.Altitude),
 				GroundSpeed: int32(client.GroundSpeed),
-				OnlineTime:  client.OnlineTime.Unix(),
+				OnlineTime:  client.History.StartTime.Unix(),
 			}
 			s.onlineClient.OnlinePilot = append(s.onlineClient.OnlinePilot, pilotInfo)
 		}

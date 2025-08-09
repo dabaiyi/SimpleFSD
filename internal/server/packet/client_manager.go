@@ -23,6 +23,11 @@ func NewServerCloseCallback() *ServerCloseCallback {
 
 func (dc *ServerCloseCallback) Invoke(_ context.Context) error {
 	heartbeatSender.Stop()
+	clientManager.lock.Lock()
+	defer clientManager.lock.Unlock()
+	for _, client := range clientManager.clients {
+		client.MarkedDisconnect(true)
+	}
 	return nil
 }
 
@@ -45,7 +50,7 @@ func GetClientManager() *ClientManager {
 			clientManager = &ClientManager{
 				clients: make(map[string]*Client),
 			}
-			heartbeatSender = NewHeartbeatSender(config.ServerConfig.HeartbeatDuration, clientManager.SendHeartBeat)
+			heartbeatSender = NewHeartbeatSender(config.Server.FSDServer.HeartbeatDuration, clientManager.SendHeartBeat)
 			c.NewCleaner().Add(NewServerCloseCallback())
 		}
 	})
@@ -128,7 +133,7 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, fi
 	defer clientSlicePool.Put(clients)
 
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, config.MaxBroadcastWorkers)
+	sem := make(chan struct{}, config.Server.FSDServer.MaxBroadcastWorkers)
 
 	for _, client := range clients {
 		if client == fromClient || client.disconnect {

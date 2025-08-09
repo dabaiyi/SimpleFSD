@@ -39,7 +39,7 @@ type Client struct {
 	VisualRange    float64
 	FlightPlan     *database.FlightPlan
 	AtisInfo       []string
-	OnlineTime     time.Time
+	History        *database.History
 	disconnect     bool
 	motdBytes      []byte
 	reconnectTimer *time.Timer
@@ -48,8 +48,14 @@ type Client struct {
 
 func NewClient(callsign string, rating Rating, user *database.User, protocol int, realName string, socket net.Conn, isAtc bool) *Client {
 	var flightPlan *database.FlightPlan = nil
+	var flightPlanId database.FlightPlanId
+	if config.Server.General.SimulatorServer {
+		flightPlanId = database.StringFlightPlanId(callsign)
+	} else {
+		flightPlanId = database.IntFlightPlanId(user.Cid)
+	}
 	if !isAtc {
-		flightPlan, _ = database.GetFlightPlan(user.Cid)
+		flightPlan, _ = flightPlanId.GetFlightPlan()
 	} else {
 		flightPlan = nil
 	}
@@ -71,7 +77,7 @@ func NewClient(callsign string, rating Rating, user *database.User, protocol int
 		VisualRange:    40,
 		FlightPlan:     flightPlan,
 		AtisInfo:       make([]string, 0, 4),
-		OnlineTime:     time.Now(),
+		History:        database.NewHistory(user.Cid, callsign, isAtc),
 		motdBytes:      nil,
 		disconnect:     false,
 		reconnectTimer: nil,
@@ -90,6 +96,12 @@ func (c *Client) Delete() {
 	if c.disconnect {
 		logger.InfoF("[%s] Client session deleted", c.Callsign)
 		_ = clientManager.DeleteClient(c.Callsign)
+		_ = c.History.End()
+		if c.IsAtc {
+			_ = c.User.AddAtcTime(c.History.OnlineTime)
+		} else {
+			_ = c.User.AddPilotTime(c.History.OnlineTime)
+		}
 	}
 }
 
@@ -110,7 +122,7 @@ func (c *Client) Reconnect(socket net.Conn) bool {
 	return true
 }
 
-func (c *Client) MarkedDisconnect() {
+func (c *Client) MarkedDisconnect(immediate bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -128,7 +140,12 @@ func (c *Client) MarkedDisconnect() {
 		c.reconnectTimer.Stop()
 	}
 
-	c.reconnectTimer = time.AfterFunc(config.SessionCleanDuration, c.Delete)
+	if immediate {
+		c.Delete()
+		return
+	}
+
+	c.reconnectTimer = time.AfterFunc(config.Server.FSDServer.SessionCleanDuration, c.Delete)
 }
 
 func (c *Client) UpdateFlightPlan(flightPlanData []string) error {
@@ -218,9 +235,10 @@ func (c *Client) SendMotd() {
 		_, _ = c.Socket.Write(c.motdBytes)
 		return
 	}
-	data := make([][]byte, 0, len(config.ServerConfig.Motd)+1)
-	data = append(data, []byte(fmt.Sprintf("%sserver:%s:Welcome to user %s v%s\r\n", Message, c.Callsign, config.AppName, config.AppVersion)))
-	for _, message := range config.ServerConfig.Motd {
+	data := make([][]byte, 0, len(config.Server.FSDServer.Motd)+1)
+	data = append(data, []byte(fmt.Sprintf("%sserver:%s:Welcome to use %s v%s\r\n", Message, c.Callsign,
+		config.Server.FSDServer.FSDName, logger.AppVersion.String())))
+	for _, message := range config.Server.FSDServer.Motd {
 		data = append(data, makePacket(Message, "server", c.Callsign, message))
 	}
 	buffer := bytes.Buffer{}

@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	config, err := c.ReadConfig()
+	config, err := c.GetConfig()
 	if err != nil {
 		c.FatalF("Error occurred while reading config %v", err)
 		return
@@ -23,9 +23,11 @@ func main() {
 		c.FatalF("Error occurred while initializing database, details: %v", err)
 		return
 	}
-	c.Info("Database initialized and connection established")
 	packet.SyncRatingConfig()
-	if config.ServerConfig.EnableGRPC {
+	if config.Server.HttpServer.Enabled {
+		go server.StartHttpServer()
+	}
+	if config.Server.GRPCServer.Enabled {
 		go server.StartGRPCServer()
 	}
 	server.StartFSDServer()

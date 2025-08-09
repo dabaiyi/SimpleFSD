@@ -3,12 +3,12 @@
 一个用于模拟飞行联飞的FSD, 使用Go语言编写  
 FSD支持计划同步, 计划锁定, 网页计划提交
 
-[![GitHub release](https://img.shields.io/github/v/release/Flyleague-Collection/fsd-server)](https://www.github.com/Flyleague-Collection/fsd-server/releases/latest)
-![GitHub Release Date](https://img.shields.io/github/release-date/Flyleague-Collection/fsd-server?display_date=published_at)  
-![GitHub last commit](https://img.shields.io/github/last-commit/Flyleague-Collection/fsd-server?display_timestamp=committer)
-![Build](https://img.shields.io/github/actions/workflow/status/Flyleague-Collection/fsd-server/go-build.yml)  
-![GitHub top language](https://img.shields.io/github/languages/top/Flyleague-Collection/fsd-server)
-![MIT](https://img.shields.io/badge/License-MIT-blue)
+[![GitHub release](https://img.shields.io/github/v/release/Flyleague-Collection/fsd-server?style=for-the-badge&logo=github)](https://www.github.com/Flyleague-Collection/fsd-server/releases/latest)
+![GitHub Release Date](https://img.shields.io/github/release-date/Flyleague-Collection/fsd-server?display_date=published_at&style=for-the-badge&logo=github)  
+![GitHub last commit](https://img.shields.io/github/last-commit/Flyleague-Collection/fsd-server?display_timestamp=committer&style=for-the-badge&logo=github)
+![Build](https://img.shields.io/github/actions/workflow/status/Flyleague-Collection/fsd-server/go-build.yml?style=for-the-badge&logo=github)  
+![GitHub top language](https://img.shields.io/github/languages/top/Flyleague-Collection/fsd-server?style=for-the-badge&logo=github)
+![MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge&logo=github)
 
 ## 如何使用
 

@@ -25,6 +25,7 @@ type FSDServerConfig struct {
 	FSDName              string        `json:"fsd_name"` // 应用名称
 	Host                 string        `json:"host"`
 	Port                 uint64        `json:"port"`
+	Address              string        `json:"-"`
 	HeartbeatInterval    string        `json:"heartbeat_interval"`
 	HeartbeatDuration    time.Duration `json:"-"`
 	SessionCleanTime     string        `json:"session_clean_time"`    // 会话保留时间
@@ -38,6 +39,7 @@ type HttpServerConfig struct {
 	Enabled       bool          `json:"enabled"`
 	Host          string        `json:"host"`
 	Port          uint64        `json:"port"`
+	Address       string        `json:"-"`
 	MaxWorkers    int           `json:"max_workers"` // 并发线程数
 	CacheTime     string        `json:"cache_time"`
 	CacheDuration time.Duration `json:"-"`
@@ -50,6 +52,7 @@ type GRPCServerConfig struct {
 	Enabled       bool          `json:"enabled"`
 	Host          string        `json:"host"`
 	Port          uint64        `json:"port"`
+	Address       string        `json:"-"`
 	CacheTime     string        `json:"cache_time"`
 	CacheDuration time.Duration `json:"-"`
 }
@@ -103,7 +106,7 @@ var (
 func newConfig() *Config {
 	return &Config{
 		DebugMode:     false,
-		ConfigVersion: confVersion.string(),
+		ConfigVersion: confVersion.String(),
 		Server: ServerConfig{
 			General: OtherConfig{
 				SimulatorServer: false,
@@ -192,7 +195,7 @@ func (c *Config) handleConfigVersion() error {
 	}
 	result := confVersion.checkVersion(version)
 	if result != AllMatch {
-		return fmt.Errorf("config version mismatch, expected %s, got %s", confVersion.string(), version.string())
+		return fmt.Errorf("config version mismatch, expected %s, got %s", confVersion.String(), version.String())
 	}
 	return nil
 }
@@ -218,15 +221,21 @@ func (c *Config) handleConfig() error {
 		return fmt.Errorf("invalid json field heartbead_interval, %v", err)
 	}
 
+	config.Server.FSDServer.Address = fmt.Sprintf("%s:%d", config.Server.FSDServer.Host, config.Server.FSDServer.Port)
+
 	config.Server.HttpServer.CacheDuration, err = time.ParseDuration(config.Server.HttpServer.CacheTime)
 	if err != nil {
 		return fmt.Errorf("invalid json field http_server.cache_time, %v", err)
 	}
 
+	config.Server.HttpServer.Address = fmt.Sprintf("%s:%d", config.Server.HttpServer.Host, config.Server.HttpServer.Port)
+
 	config.Server.GRPCServer.CacheDuration, err = time.ParseDuration(config.Server.GRPCServer.CacheTime)
 	if err != nil {
 		return fmt.Errorf("invalid json field grpc_server.cache_time, %v", err)
 	}
+
+	config.Server.GRPCServer.Address = fmt.Sprintf("%s:%d", config.Server.GRPCServer.Host, config.Server.GRPCServer.Port)
 
 	config.Database.ConnectIdleDuration, err = time.ParseDuration(config.Database.ConnectIdleTimeout)
 	if err != nil {

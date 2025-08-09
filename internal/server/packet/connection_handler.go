@@ -25,15 +25,20 @@ func (c *ConnectionHandler) SendError(result *Result) {
 	if result.success {
 		return
 	}
+	if c.Client != nil {
+		c.Client.SendError(result)
+		return
+	}
 	var packet []byte
 	if c.Client != nil {
 		packet = makePacket(Error, "server", c.Client.Callsign, fmt.Sprintf("%03d", result.errno.Index()), result.env, result.errno.String())
 	} else {
 		packet = makePacket(Error, "server", "unknown", fmt.Sprintf("%03d", result.errno.Index()), result.env, result.errno.String())
 	}
-	c.Client.SendLine(packet)
+	logger.DebugF("[%s] <- %s", c.ConnId, packet[:len(packet)-splitSignLen])
+	_, _ = c.Conn.Write(packet)
 	if result.fatal {
-		time.AfterFunc(time.Second, func() {
+		time.AfterFunc(500*time.Millisecond, func() {
 			_ = c.Conn.Close()
 		})
 	}
@@ -71,7 +76,8 @@ func (c *ConnectionHandler) HandleConnection() {
 	}
 
 	if c.Client != nil {
-		logger.InfoF("[%s] Disconnected, session will be saved for %s", c.Client.Callsign, config.SessionCleanDuration.String())
-		c.Client.MarkedDisconnect()
+		logger.InfoF("[%s] Disconnected, session will be saved for %s",
+			c.Client.Callsign, config.Server.FSDServer.SessionCleanDuration.String())
+		c.Client.MarkedDisconnect(false)
 	}
 }

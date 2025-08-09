@@ -127,10 +127,10 @@ func (r Rating) CheckRatingFacility(facility Facility) bool {
 
 func SyncRatingConfig() {
 	config, _ := c.GetConfig()
-	if len(config.RatingConfig) == 0 {
+	if len(config.Rating) == 0 {
 		return
 	}
-	for rating, facility := range config.RatingConfig {
+	for rating, facility := range config.Rating {
 		ratingFacilityMap[Rating(utils.StrToInt(rating, 0))] = Facility(facility)
 	}
 }

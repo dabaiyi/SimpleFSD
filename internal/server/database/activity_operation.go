@@ -64,14 +64,14 @@ func (ac *Activity) Save() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).Save(&ac).Error
+	err := database.WithContext(ctx).Save(ac).Error
 	return err
 }
 
 func (ac *Activity) Delete() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	err := database.WithContext(ctx).Delete(&ac).Error
+	err := database.WithContext(ctx).Delete(ac).Error
 	return err
 }
 
@@ -79,7 +79,7 @@ func (ac *Activity) setStatus(status ActivityStatus) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).Model(&ac).Update("status", int(status)).Error
+	err := database.WithContext(ctx).Model(ac).Update("status", int(status)).Error
 	return err
 }
 
@@ -99,14 +99,14 @@ func (acp *ActivityPilot) Save() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).Save(&acp).Error
+	err := database.WithContext(ctx).Save(acp).Error
 	return err
 }
 
 func (acp *ActivityPilot) Delete() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	err := database.WithContext(ctx).Delete(&acp).Error
+	err := database.WithContext(ctx).Delete(acp).Error
 	return err
 }
 
@@ -114,7 +114,7 @@ func (acp *ActivityPilot) setStatus(status ActivityPilotStatus) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).Model(&acp).Update("status", int(status)).Error
+	err := database.WithContext(ctx).Model(acp).Update("status", int(status)).Error
 	return err
 }
 
@@ -138,27 +138,27 @@ func (aca *ActivityATC) Save() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).Save(&aca).Error
+	err := database.WithContext(ctx).Save(aca).Error
 	return err
 }
 
 func (aca *ActivityATC) Cancel() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	err := database.WithContext(ctx).Model(&aca).Update("cid", 0).Error
+	err := database.WithContext(ctx).Model(aca).Update("cid", 0).Error
 	return err
 }
 
 func (aca *ActivityATC) Delete() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	err := database.WithContext(ctx).Delete(&aca).Error
+	err := database.WithContext(ctx).Delete(aca).Error
 	return err
 }
 
 func (aca *ActivityATC) SetAtc(user *User) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	err := database.WithContext(ctx).Model(&aca).Update("cid", user.Cid).Error
+	err := database.WithContext(ctx).Model(aca).Update("cid", user.Cid).Error
 	return err
 }

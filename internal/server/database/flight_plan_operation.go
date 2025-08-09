@@ -111,7 +111,7 @@ func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string, atcEdit 
 	flightPlan.Route = flightPlanData[16]
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	err := database.WithContext(ctx).Save(&flightPlan).Error
+	err := database.WithContext(ctx).Save(flightPlan).Error
 	return err
 }
 

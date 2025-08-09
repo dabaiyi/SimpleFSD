@@ -26,7 +26,7 @@ type Version struct {
 func newVersion(version string) (*Version, error) {
 	versions := strings.Split(version, ".")
 	if len(versions) < 3 {
-		return nil, errors.New("invalid version string")
+		return nil, errors.New("invalid version String")
 	}
 	return &Version{
 		major:   utils.StrToInt(versions[0], 0),
@@ -49,6 +49,6 @@ func (v *Version) checkVersion(version *Version) VersionType {
 	return AllMatch
 }
 
-func (v *Version) string() string {
+func (v *Version) String() string {
 	return v.version
 }
