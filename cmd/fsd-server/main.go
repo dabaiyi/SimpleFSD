@@ -13,6 +13,11 @@ func main() {
 		c.FatalF("Error occurred while reading config %v", err)
 		return
 	}
+	err = packet.SyncRatingConfig()
+	if err != nil {
+		c.FatalF("Error occurred while handle rating config, details: %v", err)
+		return
+	}
 	loggerCallback := c.Init()
 	c.Info("Application initializing...")
 	cleaner := c.NewCleaner()
@@ -23,7 +28,6 @@ func main() {
 		c.FatalF("Error occurred while initializing database, details: %v", err)
 		return
 	}
-	packet.SyncRatingConfig()
 	if config.Server.HttpServer.Enabled {
 		go server.StartHttpServer()
 	}

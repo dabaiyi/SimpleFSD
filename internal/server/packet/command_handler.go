@@ -111,8 +111,8 @@ func (c *ConnectionHandler) handleAddPilot(data []string, rawLine []byte) *Resul
 	if result != nil {
 		return result
 	}
-	reqRating := Rating(utils.StrToInt(data[4], 0))
-	if reqRating != Observer {
+	reqRating := Rating(utils.StrToInt(data[4], 0) - 1)
+	if reqRating != Normal || !ratingFacilityMap[reqRating].CheckFacility(Pilot) {
 		return resultError(RequestLevelTooHigh, true, callsign)
 	}
 	simType := utils.StrToInt(data[6], 0)
@@ -143,7 +143,7 @@ func (c *ConnectionHandler) handleAtcPosUpdate(data []string, rawLine []byte) *R
 		return resultError(Syntax, false, "")
 	}
 	callsign := data[0]
-	facility := Facility(utils.StrToInt(data[2], 0))
+	facility := Facility(1 << utils.StrToInt(data[2], 0))
 	rating := Rating(utils.StrToInt(data[4], 0))
 	if !rating.CheckRatingFacility(facility) {
 		return resultError(RequestLevelTooHigh, true, callsign)

@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/utils"
 )
@@ -125,14 +126,19 @@ func (r Rating) CheckRatingFacility(facility Facility) bool {
 	return ratingFacilityMap[r].CheckFacility(facility)
 }
 
-func SyncRatingConfig() {
+func SyncRatingConfig() error {
 	config, _ := c.GetConfig()
 	if len(config.Rating) == 0 {
-		return
+		return nil
 	}
 	for rating, facility := range config.Rating {
-		ratingFacilityMap[Rating(utils.StrToInt(rating, 0))] = Facility(facility)
+		r := utils.StrToInt(rating, -2)
+		if r <= -2 || r > 12 {
+			return fmt.Errorf("illegal permission value %s", rating)
+		}
+		ratingFacilityMap[Rating(r)] = Facility(facility)
 	}
+	return nil
 }
 
 type ClientCommand string

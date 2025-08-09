@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type ClientManager struct {
@@ -21,14 +22,25 @@ func NewServerCloseCallback() *ServerCloseCallback {
 	return &ServerCloseCallback{}
 }
 
-func (dc *ServerCloseCallback) Invoke(_ context.Context) error {
+func (dc *ServerCloseCallback) Invoke(ctx context.Context) error {
 	heartbeatSender.Stop()
-	clientManager.lock.Lock()
-	defer clientManager.lock.Unlock()
-	for _, client := range clientManager.clients {
-		client.MarkedDisconnect(true)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		for _, client := range clientManager.clients {
+			client.MarkedDisconnect(true)
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-timeoutCtx.Done():
+		return timeoutCtx.Err()
 	}
-	return nil
 }
 
 var (

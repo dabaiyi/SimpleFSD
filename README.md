@@ -22,7 +22,7 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 1. 克隆本仓库
 2. 确保安装了go编译器并且版本>=1.23.4
 3. 在项目根目录运行如下命令`go build -x .\cmd\fsd-server\`
-4. \[可选\]使用upx压缩可执行文件(windows)`upx.exe -9 .\fsd-server.exe`或者(linux)`upx.exe -9 .\fsd-server`
+4. \[可选\]使用upx压缩可执行文件(windows)`upx.exe -9 .\fsd-server.exe`或者(linux)`upx -9 .\fsd-server`
 5. 等待编译完成后, 对于Windows用户, 运行生成的fsd-server.exe; 对于linux用户, 运行生成的fsd-server文件
 6. 首次运行会在可执行文件同目录创建配置文件`config.json`, 请在编辑配置文件后再次启动
 7. Enjoy
@@ -31,65 +31,183 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 
 ```json5
 {
-  // 调试模式, 打开后会有大量日志输出, 请不要在生产环境打开
+  // 调试模式, 会输出大量日志, 请不要在生产环境中打开
   "debug_mode": false,
-  // 服务器名称, 在客户端初次建立连接后会被发送到客户端
-  "app_name": "",
-  // 服务器版本, 在客户端初次建立连接后会被发送到客户端
-  "app_version": "",
-  // 最大并发线程数, 也可以看做最大客户端连接数, 推荐值: 64-256
-  "max_workers": 0,
-  // 最大广播线程数, 推荐与最大并发线程数相同
-  // 即每个客户端都可以有一个专门的广播线程, 推荐值: 64-256
-  "max_broadcast_workers": 0,
-  // 服务器保留客户端连接信息的时间
-  // 在这个时间之内客户端重连可以保留之前的数据
-  // 反之则清理数据, 推荐值: 40s
-  "session_clean_time": "",
-  // fsd 服务器配置
-  "server_config": {
-    // 服务器监听地址, 推荐值: 0.0.0.0
-    "host": "",
-    // 服务器监听端口, 推荐值: 6809
-    "port": 0,
-    // 是否启用grpc, 推荐值: true
-    "enable_grpc": false,
-    // grpc端口, 推荐值: 6810
-    // 注: grpc监听地址同服务器监听地址
-    "grpc_port": 0,
-    // grpc 缓存过期时间, 推荐值: 15s
-    "grpc_cache_time": "",
-    // 服务器心跳包间隔, 推荐值: 60s
-    "heartbeat_interval": "",
-    // 服务器motd
-    "motd": null
+  // 配置文件版本, 通常情况下与软件版本一致
+  "config_version": "0.4.0",
+  // 服务配置
+  "server": {
+    // 通用配置项
+    "general": {
+      // 是否为模拟机服务器
+      // 由于需要实现检查网页提交计划于实际连线计划是否一致
+      // 所以飞行计划存储是用用户cid进行标识的
+      // 但模拟机所有的模拟机都是一个用户cid, 此时就会出问题
+      // 即模拟机计划错误或者无法获取到计划
+      // 这个时候将这个变量设置为true
+      // 这样服务器就会使用呼号作为标识
+      // 但是与此同时就失去了呼号匹配检查的功能
+      // 但网页提交计划仍然可用, 只是没有检查功能
+      // 所以将这个开关命名为模拟机服务器开关
+      "simulator_server": false,
+      // 密码加密轮数
+      "bcrypt_cost": 12
+    },
+    // FSD服务器配置
+    "fsd_server": {
+      // FSD名称, 会被发送到连接到服务器的客户端作为motd消息
+      "fsd_name": "Simple-Fsd",
+      // FSD服务器监听地址
+      "host": "127.0.0.1",
+      // FSD服务器监听端口
+      "port": 6809,
+      // FSD服务器心跳间隔
+      "heartbeat_interval": "60s",
+      // FSD服务器会话过期事件
+      // 在过期时间内重连, 服务器会自动匹配断开时的session
+      // 反之则会创建新session
+      "session_clean_time": "40s",
+      // 最大工作线程数, 也可以理解为最大同时连接的sockets数目
+      "max_workers": 128,
+      // 最大广播线程数, 用于广播消息的最大线程数
+      "max_broadcast_workers": 128,
+      // 要发送到客户端的motd消息
+      "motd": []
+    },
+    // Http服务器配置
+    "http_server": {
+      // 是否启用Http服务器
+      "enabled": false,
+      // Http服务器监听地址
+      "host": "0.0.0.0",
+      // Http服务器监听端口
+      "port": 6810,
+      // Http服务器最大工作线程
+      "max_workers": 128,
+      // Http服务器Api缓存时间
+      "cache_time": "15s",
+      // 是否启用SSL
+      "enable_ssl": false,
+      // 如果启用SSL, 这里填写证书路径
+      "cert_file": "",
+      // 如果启用SSL, 这里填写私钥路径
+      "key_file": ""
+    },
+    // gRPC服务器
+    "grpc_server": {
+      // 是否启用gRPC服务器
+      "enabled": false,
+      // gRPC服务器监听地址
+      "host": "0.0.0.0",
+      // gRPC服务器监听端口
+      "port": 6811,
+      // gRPC服务器Api缓存时间
+      "cache_time": "15s"
+    }
   },
   // 数据库配置
-  "database_config": {
-    // 数据库类型, 可选值: [mysql, postgres, sqlite3]
-    "type": "sqlite3",
+  "database": {
+    // 数据库类型, 支持的数据库类型: mysql, postgres, sqlite3
+    "type": "mysql",
+    // 当数据库类型为sqlite3的时候, 这里是数据库存放路径和文件名
+    // 反之则为要使用的数据库名称
+    "database": "go-fsd",
     // 数据库地址
-    "host": "",
+    "host": "localhost",
     // 数据库端口
-    "port": 0,
+    "port": 3306,
     // 数据库用户名
-    "username": "",
+    "username": "root",
     // 数据库密码
-    "password": "",
-    // 当数据库类型是sqlite3时, 该字段为数据库文件路径
-    // 否则为使用的数据库名称
-    "database": "",
+    "password": "123456",
     // 是否启用SSL
     "enable_ssl": false,
-    // 连接空闲时间, 推荐值: 1h
-    "connect_idle_timeout": "",
-    // 连接超时时间, 推荐值: 5s
-    "connect_timeout": "",
-    // 数据库最大可用连接, 推荐值: 128
-    "server_max_connections": 0
+    // 数据库连接池连接超时时间
+    "connect_idle_timeout": "1h",
+    // 连接超时时间
+    "connect_timeout": "5s",
+    // 数据库最大连接数
+    "server_max_connections": 32
   },
-  // 额外权限配置, 详情请看`额外权限配置`章节
-  "rating_config": {}
+  // 特殊权限配置, 详情请见`特殊权限配置` 章节
+  "rating": {}
+}
+```
+
+### 权限定义表
+
+#### FSD管制权限一览
+
+| 权限识别名         | 权限值 | 中文名   | 说明                      |
+|:--------------|:---:|:------|:------------------------|
+| Ban           | -1  | 封禁    |                         |
+| Normal        |  0  | 普通用户  | 默认权限                    |
+| Observer      |  1  | 观察者   |                         |
+| STU1          |  2  | 放行/地面 |                         |
+| STU2          |  3  | 塔台    |                         |
+| STU3          |  4  | 终端    |                         |
+| CTR1          |  5  | 区域    |                         |
+| CTR2          |  6  | 区域    | 该权限已被弃用, 这里写出来只是为了与ES同步 |
+| CTR3          |  7  | 区域    |                         |
+| Instructor1   |  8  | 教员    |                         |
+| Instructor2   |  9  | 教员    |                         |
+| Instructor3   | 10  | 教员    |                         |
+| Supervisor    | 11  | 监察者   |                         |
+| Administrator | 12  | 管理员   |                         |
+
+#### 管制席位一览
+
+| 席位识别名 | 席位编码 | 中文名 | 说明         |
+|:------|:-----|:----|:-----------|
+| Pilot | 1    | 飞行员 | 连线飞行员属于该席位 |
+| OBS   | 2    | 观察者 |            |
+| DEL   | 4    | 放行  |            |
+| GND   | 8    | 地面  |            |
+| TWR   | 16   | 塔台  |            |
+| APP   | 32   | 进近  |            |
+| CTR   | 64   | 区域  |            |
+| FSS   | 128  | 飞服  |            |
+
+#### 管制权限与管制席位对照一览
+
+| 权限识别名         | 允许的席位                             | 说明   |
+|:--------------|:----------------------------------|:-----|
+| Ban           | 不允许任何席位                           | 封禁用户 |
+| Normal        | Pilot                             |      |
+| Observer      | Pilot,OBS                         |      |
+| STU1          | Pilot,OBS,DEL,GND                 |      |
+| STU2          | Pilot,OBS,DEL,GND,TWR             |      |
+| STU3          | Pilot,OBS,DEL,GND,TWR,APP         |      |
+| CTR1          | Pilot,OBS,DEL,GND,TWR,APP,CTR     |      |
+| CTR2          | Pilot,OBS,DEL,GND,TWR,APP,CTR     |      |
+| CTR3          | Pilot,OBS,DEL,GND,TWR,APP,CTR,FSS |      |
+| Instructor1   | Pilot,OBS,DEL,GND,TWR,APP,CTR,FSS |      |
+| Instructor2   | Pilot,OBS,DEL,GND,TWR,APP,CTR,FSS |      |
+| Instructor3   | Pilot,OBS,DEL,GND,TWR,APP,CTR,FSS |      |
+| Supervisor    | Pilot,OBS,DEL,GND,TWR,APP,CTR,FSS |      |
+| Administrator | Pilot,OBS,DEL,GND,TWR,APP,CTR,FSS |      |
+
+### 特殊权限配置
+
+你可以通过配置文件覆写管制权限与管制席位对照表  
+注意!!! 这个字段会`覆盖`默认的对照表  
+所以在明确的知道你在做什么之前, 不要修改这个配置
+配置文件字段为`rating`
+
+```json5
+{
+  // 特殊权限配置
+  "rating": {
+    // 键为想要修改的权限识别名的权限值
+    // 比如我想让Normal也可以上OBS席位, 也就是普通飞行员也可以以OBS身份连线
+    // Normal的权限值是0, 那我的键就是0
+    // 值为想要许可连线的席位的席位编码之和
+    // 比如我想让飞行员可以正常连线, 也可以以OBS连线
+    // 那么值就是 1 + 2 = 3
+    // 如果我想他还能上个飞服(请勿模仿)
+    // 那么值就是 1 + 2 + 128 = 131
+    "0": 3
+  }
 }
 ```
 
