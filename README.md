@@ -66,6 +66,8 @@ FSD支持计划同步, 计划锁定, 网页计划提交
   },
   // 数据库配置
   "database_config": {
+    // 数据库类型, 可选值: [mysql, postgres, sqlite3]
+    "type": "sqlite3",
     // 数据库地址
     "host": "",
     // 数据库端口
@@ -74,8 +76,11 @@ FSD支持计划同步, 计划锁定, 网页计划提交
     "username": "",
     // 数据库密码
     "password": "",
-    // 数据库名称
+    // 当数据库类型是sqlite3时, 该字段为数据库文件路径
+    // 否则为使用的数据库名称
     "database": "",
+    // 是否启用SSL
+    "enable_ssl": false,
     // 连接空闲时间, 推荐值: 1h
     "connect_idle_timeout": "",
     // 连接超时时间, 推荐值: 5s
