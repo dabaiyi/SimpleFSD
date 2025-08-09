@@ -2,9 +2,15 @@ name: Go-Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - "main"
+    paths:
+      - cmd/**
+      - internal/**
+      - go.mod
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - "main"
 
 jobs:
   build:
@@ -30,7 +36,7 @@ jobs:
           install-only: true
 
       - name: Compress executable file
-        run: | 
+        run: |
           upx -fq -9 ./fsd-server-linux-nightly
           upx -fq -9 ./fsd-server-windows-amd64-nightly.exe
 
