@@ -36,9 +36,9 @@ func (dc *DBCloseCallback) Invoke(ctx context.Context) error {
 
 func ConnectDatabase() error {
 	config, _ = c.GetConfig()
-	queryTimeout = config.DatabaseConfig.QueryDuration
+	queryTimeout = config.Database.QueryDuration
 
-	connection := config.DatabaseConfig.DBType.GetConnection()
+	connection := config.Database.GetConnection()
 
 	connectionConfig := gorm.Config{}
 	connectionConfig.DefaultTransactionTimeout = 5 * time.Second
@@ -56,8 +56,7 @@ func ConnectDatabase() error {
 	}
 	database = db
 
-	err = db.Migrator().AutoMigrate(&User{}, &FlightPlan{})
-	if err != nil {
+	if err = db.Migrator().AutoMigrate(&User{}, &FlightPlan{}, &History{}, &Activity{}, &ActivityATC{}, &ActivityPilot{}); err != nil {
 		return Errorf("error occured while migrating database: %v", err)
 	}
 
@@ -66,16 +65,19 @@ func ConnectDatabase() error {
 		return Errorf("error occured while creating database pool: %v", err)
 	}
 
-	maxOpenConnections := float32(config.DatabaseConfig.ServerMaxConnections) * 0.8 // 不超过数据库最大连接的80%
-	maxIdleConnections := maxOpenConnections / 5                                    // 空闲连接约为最大连接的20%
+	maxOpenConnections := config.Database.ServerMaxConnections * 4 / 5 // 不超过数据库最大连接的80%
+	maxIdleConnections := maxOpenConnections / 5                       // 空闲连接约为最大连接的20%
 
-	dbPool.SetMaxIdleConns(int(maxIdleConnections))
-	dbPool.SetMaxOpenConns(int(maxOpenConnections))
-	dbPool.SetConnMaxLifetime(config.DatabaseConfig.ConnectIdleDuration)
+	dbPool.SetMaxIdleConns(maxIdleConnections)
+	dbPool.SetMaxOpenConns(maxOpenConnections)
+	dbPool.SetConnMaxLifetime(config.Database.ConnectIdleDuration)
+
 	err = dbPool.Ping()
 	if err != nil {
 		return Errorf("error occured while pinging database: %v", err)
 	}
+	c.Info("Database initialized and connection established")
+
 	c.NewCleaner().Add(NewDBCloseCallback())
 	return nil
 }

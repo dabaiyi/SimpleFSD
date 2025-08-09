@@ -1,22 +1,26 @@
 package database
 
 import (
-	"gorm.io/gorm"
 	"time"
 )
 
 type User struct {
-	ID          uint   `gorm:"primarykey"`
-	Username    string `gorm:"size:64;uniqueIndex:user_ident_index"`
-	Email       string `gorm:"size:64;uniqueIndex:user_ident_index"`
-	Cid         int    `gorm:"uniqueIndex"`
-	Password    string `gorm:"size:64"`
-	QQ          int
-	Rating      int
-	FlightPlans FlightPlan `gorm:"foreignKey:Cid;references:Cid"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
+	ID              uint   `gorm:"primarykey"`
+	Username        string `gorm:"size:64;uniqueIndex"`
+	Email           string `gorm:"size:64;uniqueIndex"`
+	Cid             int    `gorm:"uniqueIndex"`
+	Password        string `gorm:"size:128"`
+	QQ              int
+	Rating          int
+	Permission      int64
+	TotalPilotTime  int
+	TotalAtcTime    int
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	FlightPlans     []FlightPlan    `gorm:"foreignKey:Cid;references:Cid"`
+	OnlineHistories []History       `gorm:"foreignKey:Cid;references:Cid"`
+	ActivityAtc     []ActivityATC   `gorm:"foreignKey:Cid;references:Cid"`
+	ActivityPilot   []ActivityPilot `gorm:"foreignKey:Cid;references:Cid"`
 }
 
 type FlightPlan struct {
@@ -42,5 +46,56 @@ type FlightPlan struct {
 	FromWeb          bool
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
-	DeletedAt        gorm.DeletedAt `gorm:"index"`
+}
+
+type History struct {
+	ID         uint   `gorm:"primarykey"`
+	Cid        int    `gorm:"index"`
+	Callsign   string `gorm:"size:16;uniqueIndex"`
+	StartTime  time.Time
+	EndTime    time.Time
+	OnlineTIme int
+	IsAtc      bool
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type Activity struct {
+	ID               uint   `gorm:"primarykey"`
+	Publisher        int    `gorm:"index"`
+	Title            string `gorm:"size:128"`
+	ImageUrl         string `gorm:"size:128"`
+	ActiveTime       time.Time
+	DepartureAirport string `gorm:"size:4"`
+	ArrivalAirport   string `gorm:"size:4"`
+	Route            string `gorm:"size:128"`
+	Distance         int
+	Status           int
+	NOTAMS           string          `gorm:"type:text"`
+	Facilities       []ActivityATC   `gorm:"foreignKey:ActivityId;references:ID"`
+	Pilots           []ActivityPilot `gorm:"foreignKey:ActivityId;references:ID"`
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type ActivityATC struct {
+	ID         uint `gorm:"primarykey"`
+	ActivityId uint `gorm:"index"`
+	Cid        uint `gorm:"index"`
+	MinRating  int
+	Callsign   string `gorm:"size:16"`
+	Frequency  string `gorm:"size:4"`
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type ActivityPilot struct {
+	ID           uint   `gorm:"primarykey"`
+	ActivityId   uint   `gorm:"index"`
+	Cid          int    `gorm:"index"`
+	Callsign     string `gorm:"size:16"`
+	AircraftType string `gorm:"size:8"`
+	Status       int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }

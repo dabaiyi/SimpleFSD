@@ -6,19 +6,44 @@ import (
 	"github.com/half-nothing/fsd-server/internal/utils"
 )
 
-func GetFlightPlan(cid int) (*FlightPlan, error) {
+type FlightPlanId interface {
+	GetFlightPlan() (*FlightPlan, error)
+}
+
+type IntFlightPlanId int
+
+type StringFlightPlanId string
+
+func (id IntFlightPlanId) GetFlightPlan() (*FlightPlan, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	flightPlan := FlightPlan{}
 	var err error
-	err = database.WithContext(ctx).Where("cid=?", cid).First(&flightPlan).Error
+	err = database.WithContext(ctx).Where("cid=?", id).First(&flightPlan).Error
 	if err != nil {
 		return nil, err
 	}
 	return &flightPlan, nil
+
+}
+
+func (id StringFlightPlanId) GetFlightPlan() (*FlightPlan, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	flightPlan := FlightPlan{}
+	var err error
+	err = database.WithContext(ctx).Where("callsign=?", id).First(&flightPlan).Error
+	if err != nil {
+		return nil, err
+	}
+	return &flightPlan, nil
+
 }
 
 func CreateFlightPlan(user *User, callsign string, flightPlanData []string) (*FlightPlan, error) {
+	if len(flightPlanData) < 17 {
+		return nil, fmt.Errorf("flight plan data is too short")
+	}
 	flightPlan := FlightPlan{
 		Cid:              user.Cid,
 		Callsign:         callsign,
@@ -48,11 +73,11 @@ func CreateFlightPlan(user *User, callsign string, flightPlanData []string) (*Fl
 	return &flightPlan, nil
 }
 
-func (flightPlan *FlightPlan) Lock() bool {
+func (flightPlan *FlightPlan) Lock() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	err := database.WithContext(ctx).Model(flightPlan).Update("locked", true).Error
-	return err == nil
+	return err
 }
 
 func (flightPlan *FlightPlan) Unlock() error {
@@ -63,8 +88,11 @@ func (flightPlan *FlightPlan) Unlock() error {
 }
 
 func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string, atcEdit bool) error {
+	if len(flightPlanData) < 17 {
+		return fmt.Errorf("flight plan data is too short")
+	}
 	if !atcEdit && flightPlan.Locked {
-		return nil
+		return fmt.Errorf("flight plan locked")
 	}
 	flightPlan.FlightType = flightPlanData[2]
 	flightPlan.AircraftType = flightPlanData[3]
@@ -89,7 +117,7 @@ func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string, atcEdit 
 
 func (flightPlan *FlightPlan) UpdateCruiseAltitude(cruiseAltitude string, atcEdit bool) error {
 	if !atcEdit && flightPlan.Locked {
-		return nil
+		return fmt.Errorf("flight plan locked")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
