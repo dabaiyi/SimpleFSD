@@ -13,7 +13,7 @@ on:
       - "main"
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,11 +23,8 @@ jobs:
         with:
           go-version: '1.23.4'
 
-      - name: Build Linux
-        run: go build -o fsd-server-linux-nightly -v ./cmd/fsd-server/
-
-      - name: Build Windows
-        run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o fsd-server-windows-amd64-nightly.exe ./cmd/fsd-server/
+      - name: Build
+        run: go build -o fsd-server-linux-nightly -x ./cmd/fsd-server/
 
       - name: Run UPX
         uses: crazy-max/ghaction-upx@v3
@@ -36,14 +33,34 @@ jobs:
           install-only: true
 
       - name: Compress executable file
-        run: |
-          upx -fq -9 ./fsd-server-linux-nightly
-          upx -fq -9 ./fsd-server-windows-amd64-nightly.exe
+        run: upx -fq -9 ./fsd-server-linux-nightly
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-nightly
           path: ./fsd-server-linux-nightly
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23.4'
+
+      - name: Build
+        run: go build -o fsd-server-windows-amd64-nightly.exe -x ./cmd/fsd-server/
+
+      - name: Run UPX
+        uses: crazy-max/ghaction-upx@v3
+        with:
+          version: latest
+          install-only: true
+
+      - name: Compress executable file
+        run: upx -fq -9 ./fsd-server-windows-amd64-nightly.exe
 
       - uses: actions/upload-artifact@v4
         with:
