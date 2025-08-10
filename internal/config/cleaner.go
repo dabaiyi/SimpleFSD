@@ -24,7 +24,7 @@ type Cleaner struct {
 
 var cleanerInstance = &Cleaner{}
 
-func NewCleaner() *Cleaner {
+func GetCleaner() *Cleaner {
 	return cleanerInstance
 }
 

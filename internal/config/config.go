@@ -17,8 +17,13 @@ import (
 )
 
 type OtherConfig struct {
-	SimulatorServer bool `json:"simulator_server"`
-	BcryptCost      int  `json:"bcrypt_cost"`
+	SimulatorServer    bool          `json:"simulator_server"`
+	BcryptCost         int           `json:"bcrypt_cost"`
+	JWTSecret          string        `json:"jwt_secret"`
+	JWTExpiresTime     string        `json:"jwt_expires_time"`
+	JWTExpiresDuration time.Duration `json:"-"`
+	JWTRefreshTime     string        `json:"jwt_refresh_time"`
+	JWTRefreshDuration time.Duration `json:"-"`
 }
 
 type FSDServerConfig struct {
@@ -26,6 +31,7 @@ type FSDServerConfig struct {
 	Host                 string        `json:"host"`
 	Port                 uint64        `json:"port"`
 	Address              string        `json:"-"`
+	SendWallopToADM      bool          `json:"send_wallop_to_adm"`
 	HeartbeatInterval    string        `json:"heartbeat_interval"`
 	HeartbeatDuration    time.Duration `json:"-"`
 	SessionCleanTime     string        `json:"session_clean_time"`    // 会话保留时间
@@ -111,11 +117,15 @@ func newConfig() *Config {
 			General: OtherConfig{
 				SimulatorServer: false,
 				BcryptCost:      12,
+				JWTSecret:       "123456",
+				JWTExpiresTime:  "1h",
+				JWTRefreshTime:  "1h",
 			},
 			FSDServer: FSDServerConfig{
 				FSDName:             "Simple-Fsd",
 				Host:                "0.0.0.0",
 				Port:                6809,
+				SendWallopToADM:     true,
 				HeartbeatInterval:   "60s",
 				SessionCleanTime:    "40s",
 				MaxWorkers:          128,
@@ -236,6 +246,16 @@ func (c *Config) handleConfig() error {
 	}
 
 	config.Server.GRPCServer.Address = fmt.Sprintf("%s:%d", config.Server.GRPCServer.Host, config.Server.GRPCServer.Port)
+
+	config.Server.General.JWTExpiresDuration, err = time.ParseDuration(config.Server.General.JWTExpiresTime)
+	if err != nil {
+		return fmt.Errorf("invalid json field general.jwt_expires_time, %v", err)
+	}
+
+	config.Server.General.JWTRefreshDuration, err = time.ParseDuration(config.Server.General.JWTRefreshTime)
+	if err != nil {
+		return fmt.Errorf("invalid json field general.jwt_refresh_time, %v", err)
+	}
 
 	config.Database.ConnectIdleDuration, err = time.ParseDuration(config.Database.ConnectIdleTimeout)
 	if err != nil {

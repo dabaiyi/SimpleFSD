@@ -194,7 +194,7 @@ type BroadcastTarget string
 var (
 	AllClient BroadcastTarget = "*"
 	AllATC    BroadcastTarget = "*A"
-	AllPilot  BroadcastTarget = "*P"
+	AllSup    BroadcastTarget = "*S"
 )
 
 func (b BroadcastTarget) String() string {

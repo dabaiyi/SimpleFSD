@@ -20,7 +20,7 @@ func main() {
 	}
 	loggerCallback := c.Init()
 	c.Info("Application initializing...")
-	cleaner := c.NewCleaner()
+	cleaner := c.GetCleaner()
 	cleaner.Init(loggerCallback)
 	defer cleaner.Clean()
 	err = database.ConnectDatabase()

@@ -3,7 +3,6 @@ package __
 import (
 	"github.com/half-nothing/fsd-server/internal/server/packet"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 	"sync"
 	"time"
 )
@@ -40,7 +39,8 @@ func (s *GrpcServer) GetOnlineClient(_ context.Context, _ *Empty) (*OnlineClient
 	}
 
 	clientManager := packet.GetClientManager()
-	clientCopy := clientManager.GetClientCopy()
+	clientCopy := clientManager.GetClientSnapshot()
+	defer clientManager.PutSlice(clientCopy)
 
 	s.onlineClient = &OnlineClient{
 		TotalOnline: 0,
@@ -49,6 +49,7 @@ func (s *GrpcServer) GetOnlineClient(_ context.Context, _ *Empty) (*OnlineClient
 		OnlineAtc:   make([]*OnlineAtc, 0),
 		OnlinePilot: make([]*OnlinePilot, 0),
 	}
+
 	for _, client := range clientCopy {
 		if client == nil || client.Disconnected() {
 			continue
@@ -95,33 +96,4 @@ func (s *GrpcServer) GetOnlineClient(_ context.Context, _ *Empty) (*OnlineClient
 }
 
 func (s *GrpcServer) mustEmbedUnimplementedServerStatusServer() {
-}
-
-type GrpcShutdownCallback struct {
-	grpcServer *grpc.Server
-}
-
-func NewGrpcShutdownCallback(grpcServer *grpc.Server) *GrpcShutdownCallback {
-	return &GrpcShutdownCallback{
-		grpcServer: grpcServer,
-	}
-}
-
-func (g *GrpcShutdownCallback) Invoke(ctx context.Context) error {
-	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		g.grpcServer.GracefulStop()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		return nil
-	case <-timeoutCtx.Done():
-		g.grpcServer.Stop()
-		return timeoutCtx.Err()
-	}
 }

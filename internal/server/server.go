@@ -1,16 +1,40 @@
 package server
 
 import (
+	"errors"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	__ "github.com/half-nothing/fsd-server/internal/grpc"
+	"github.com/half-nothing/fsd-server/internal/server/controller"
+	gs "github.com/half-nothing/fsd-server/internal/server/grpc"
 	"github.com/half-nothing/fsd-server/internal/server/packet"
+	"github.com/labstack/echo/v4"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"net"
+	"net/http"
 )
 
 func StartHttpServer() {
+	config, _ := c.GetConfig()
+	e := echo.New()
+	if config.Server.HttpServer.EnableSSL && (config.Server.HttpServer.CertFile == "" || config.Server.HttpServer.KeyFile == "") {
+		c.WarnF("https server request a cert file and a key file, fallback to http server")
+		config.Server.HttpServer.EnableSSL = false
+	}
 
+	apiGroup := e.Group("/api")
+	apiGroup.POST("/users", controller.UserRegister)
+
+	c.GetCleaner().Add(NewHttpServerShutdownCallback(e))
+
+	if config.Server.HttpServer.EnableSSL {
+		if err := e.StartTLS(config.Server.HttpServer.Address, config.Server.HttpServer.CertFile, config.Server.HttpServer.KeyFile); !errors.Is(err, http.ErrServerClosed) {
+			c.Fatal("Error %v", err)
+		}
+	} else {
+		if err := e.Start(config.Server.HttpServer.Address); !errors.Is(err, http.ErrServerClosed) {
+			c.Fatal("Error %v", err)
+		}
+	}
 }
 
 func StartGRPCServer() {
@@ -20,11 +44,11 @@ func StartGRPCServer() {
 		c.FatalF("Fail to open grpc port: %v", err)
 		return
 	}
-	grpcServer := grpc.NewServer()
-	__.RegisterServerStatusServer(grpcServer, __.NewGrpcServer(config.Server.GRPCServer.CacheDuration))
-	reflection.Register(grpcServer)
-	c.NewCleaner().Add(__.NewGrpcShutdownCallback(grpcServer))
 	c.InfoF("GRPC server listen on %s", ln.Addr().String())
+	grpcServer := grpc.NewServer()
+	gs.RegisterServerStatusServer(grpcServer, gs.NewGrpcServer(config.Server.GRPCServer.CacheDuration))
+	reflection.Register(grpcServer)
+	c.GetCleaner().Add(NewGrpcShutdownCallback(grpcServer))
 	err = grpcServer.Serve(ln)
 	if err != nil {
 		c.FatalF("grpc failed to serve: %v", err)
@@ -44,6 +68,7 @@ func StartFSDServer() {
 	ln, err := net.Listen("tcp", config.Server.FSDServer.Address)
 	if err != nil {
 		c.FatalF("FSD Server Start error: %v", err)
+		return
 	}
 	c.InfoF("FSD Server Listen On " + ln.Addr().String())
 
@@ -54,6 +79,8 @@ func StartFSDServer() {
 			c.ErrorF("Server close error: %v", err)
 		}
 	}()
+
+	c.GetCleaner().Add(NewFsdCloseCallback())
 
 	// 循环接受新的连接
 	for {

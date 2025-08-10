@@ -51,7 +51,7 @@ type FlightPlan struct {
 type History struct {
 	ID         uint   `gorm:"primarykey"`
 	Cid        int    `gorm:"index"`
-	Callsign   string `gorm:"size:16;uniqueIndex"`
+	Callsign   string `gorm:"size:16;index"`
 	StartTime  time.Time
 	EndTime    time.Time
 	OnlineTime int

@@ -78,6 +78,6 @@ func ConnectDatabase() error {
 	}
 	c.Info("Database initialized and connection established")
 
-	c.NewCleaner().Add(NewDBCloseCallback())
+	c.GetCleaner().Add(NewDBCloseCallback())
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"net"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -40,24 +41,26 @@ type Client struct {
 	FlightPlan     *database.FlightPlan
 	AtisInfo       []string
 	History        *database.History
-	disconnect     bool
+	disconnect     atomic.Bool
 	motdBytes      []byte
 	reconnectTimer *time.Timer
-	lock           sync.Mutex
+	lock           sync.RWMutex
 }
 
 func NewClient(callsign string, rating Rating, user *database.User, protocol int, realName string, socket net.Conn, isAtc bool) *Client {
 	var flightPlan *database.FlightPlan = nil
-	var flightPlanId database.FlightPlanId
-	if config.Server.General.SimulatorServer {
-		flightPlanId = database.StringFlightPlanId(callsign)
-	} else {
-		flightPlanId = database.IntFlightPlanId(user.Cid)
-	}
 	if !isAtc {
-		flightPlan, _ = flightPlanId.GetFlightPlan()
-	} else {
-		flightPlan = nil
+		var flightPlanId database.FlightPlanId
+		if config.Server.General.SimulatorServer {
+			flightPlanId = database.StringFlightPlanId(callsign)
+		} else {
+			flightPlanId = database.IntFlightPlanId(user.Cid)
+		}
+		var err error
+		flightPlan, err = flightPlanId.GetFlightPlan()
+		if err != nil {
+			logger.WarnF("Fail to get flight plan for %s: %v", flightPlanId.String(), err)
+		}
 	}
 	return &Client{
 		IsAtc:          isAtc,
@@ -79,28 +82,43 @@ func NewClient(callsign string, rating Rating, user *database.User, protocol int
 		AtisInfo:       make([]string, 0, 4),
 		History:        database.NewHistory(user.Cid, callsign, isAtc),
 		motdBytes:      nil,
-		disconnect:     false,
+		disconnect:     atomic.Bool{},
 		reconnectTimer: nil,
-		lock:           sync.Mutex{},
+		lock:           sync.RWMutex{},
 	}
 }
 
 func (c *Client) Disconnected() bool {
-	return c.disconnect
+	return c.disconnect.Load()
 }
 
 func (c *Client) Delete() {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	if c.disconnect {
+	if c.disconnect.Load() {
+		c.lock.Lock()
+		defer c.lock.Unlock()
 		logger.InfoF("[%s] Client session deleted", c.Callsign)
-		_ = clientManager.DeleteClient(c.Callsign)
-		_ = c.History.End()
+
+		if c.reconnectTimer != nil {
+			c.reconnectTimer.Stop()
+			c.reconnectTimer = nil
+		}
+
+		if err := c.History.End(); err != nil {
+			logger.WarnF("[%s] Failed to end history: %v", c.Callsign, err)
+		}
+
 		if c.IsAtc {
-			_ = c.User.AddAtcTime(c.History.OnlineTime)
+			if err := c.User.AddAtcTime(c.History.OnlineTime); err != nil {
+				logger.WarnF("[%s] Failed to add ATC time: %v", c.Callsign, err)
+			}
 		} else {
-			_ = c.User.AddPilotTime(c.History.OnlineTime)
+			if err := c.User.AddPilotTime(c.History.OnlineTime); err != nil {
+				logger.WarnF("[%s] Failed to add pilot time: %v", c.Callsign, err)
+			}
+		}
+
+		if !clientManager.DeleteClient(c.Callsign) {
+			logger.WarnF("[%s] Failed to delete from client manager", c.Callsign)
 		}
 	}
 }
@@ -109,43 +127,54 @@ func (c *Client) Reconnect(socket net.Conn) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if !c.disconnect {
+	if !c.disconnect.Load() {
 		return false
 	}
 
 	logger.InfoF("[%s] Client reconnected", c.Callsign)
 
-	c.reconnectTimer.Stop()
-	c.disconnect = false
+	if c.reconnectTimer != nil {
+		c.reconnectTimer.Stop()
+		c.reconnectTimer = nil
+	}
+
+	c.ClearAtcAtisInfo()
+	c.disconnect.Store(false)
 	c.Socket = socket
-	c.reconnectTimer = nil
 	return true
 }
 
 func (c *Client) MarkedDisconnect(immediate bool) {
 	c.lock.Lock()
-	defer c.lock.Unlock()
+	defer func() {
+		c.lock.Unlock()
+		if immediate {
+			c.Delete()
+		}
+	}()
 
-	if c.disconnect {
+	if !c.disconnect.CompareAndSwap(false, true) {
 		return
 	}
 
-	c.disconnect = true
-
+	// 关闭连接
 	if c.Socket != nil {
+		_ = c.Socket.Close()
 		c.Socket = nil
 	}
 
+	// 取消之前的定时器
 	if c.reconnectTimer != nil {
 		c.reconnectTimer.Stop()
 	}
 
 	if immediate {
-		c.Delete()
 		return
 	}
 
 	c.reconnectTimer = time.AfterFunc(config.Server.FSDServer.SessionCleanDuration, c.Delete)
+	logger.InfoF("[%s] Client disconnected, reconnect window: %v",
+		c.Callsign, config.Server.FSDServer.SessionCleanDuration)
 }
 
 func (c *Client) UpdateFlightPlan(flightPlanData []string) error {
@@ -213,34 +242,53 @@ func (c *Client) SendError(result *Result) {
 
 	packet := makePacket(Error, "server", c.Callsign, fmt.Sprintf("%03d", result.errno.Index()), result.env, result.errno.String())
 	c.SendLine(packet)
+
 	if result.fatal {
-		_ = c.Socket.Close()
+		c.lock.Lock()
+		defer c.lock.Unlock()
+		if c.Socket != nil {
+			_ = c.Socket.Close()
+			c.Socket = nil
+		}
+		c.disconnect.Store(true)
 	}
 }
 
 func (c *Client) SendLine(line []byte) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	if c.disconnect.Load() || c.Socket == nil {
+		logger.DebugF("[%s] Attempted send to disconnected client", c.Callsign)
+		return
+	}
+
 	if !bytes.HasSuffix(line, splitSign) {
 		logger.DebugF("[%s] <- %s", c.Callsign, line)
 		line = append(line, splitSign...)
 	} else {
 		logger.DebugF("[%s] <- %s", c.Callsign, line[:len(line)-splitSignLen])
 	}
-	if c.Socket != nil {
-		_, _ = c.Socket.Write(line)
+
+	if _, err := c.Socket.Write(line); err != nil {
+		logger.WarnF("[%s] Failed to send data: %v", c.Callsign, err)
 	}
 }
 
 func (c *Client) SendMotd() {
 	if c.motdBytes != nil {
-		_, _ = c.Socket.Write(c.motdBytes)
+		c.SendLine(c.motdBytes)
 		return
 	}
+
 	data := make([][]byte, 0, len(config.Server.FSDServer.Motd)+1)
-	data = append(data, []byte(fmt.Sprintf("%sserver:%s:Welcome to use %s v%s\r\n", Message, c.Callsign,
-		config.Server.FSDServer.FSDName, logger.AppVersion.String())))
+	data = append(data, []byte(fmt.Sprintf("%sserver:%s:Welcome to use %s v%s\r\n",
+		Message, c.Callsign, config.Server.FSDServer.FSDName, logger.AppVersion.String())))
+
 	for _, message := range config.Server.FSDServer.Motd {
 		data = append(data, makePacket(Message, "server", c.Callsign, message))
 	}
+
 	buffer := bytes.Buffer{}
 	for _, msg := range data {
 		buffer.Write(msg)

@@ -238,8 +238,8 @@ func (c *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *Re
 		// 查询指定机组的飞行计划
 		if subQuery == "FP" {
 			targetCallsign := data[3]
-			client, err := clientManager.GetClient(targetCallsign)
-			if err != nil || client.FlightPlan == nil {
+			client, ok := clientManager.GetClient(targetCallsign)
+			if !ok || client.FlightPlan == nil {
 				return resultError(NoFlightPlan, false, c.Client.Callsign)
 			}
 			c.Client.SendLine([]byte(client.FlightPlan.ToString(data[0])))
@@ -256,23 +256,22 @@ func (c *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *Re
 			subQuery := data[2]
 			if subQuery == "FA" && commandLength >= 5 {
 				targetCallsign := data[3]
-				client, err := clientManager.GetClient(targetCallsign)
-				if err != nil {
+				client, ok := clientManager.GetClient(targetCallsign)
+				if !ok {
 					// 这里并不是发给服务器的, 所以如果找不到指定客户端, 直接返回就行
 					return resultSuccess()
 				}
 				cruiseAltitude := utils.StrToInt(data[4], 0)
-				err = client.FlightPlan.UpdateCruiseAltitude(fmt.Sprintf("FL%03d", cruiseAltitude/100), true)
+				err := client.FlightPlan.UpdateCruiseAltitude(fmt.Sprintf("FL%03d", cruiseAltitude/100), true)
 				if err != nil {
 					// 这里并不是发给服务器的, 所以如果出错, 直接返回就行
 					return resultSuccess()
 				}
 			}
-		} else {
-			err := c.sendFrequencyMessage(targetStation, rawLine)
-			if err != nil {
-				return err
-			}
+		}
+		err := c.sendFrequencyMessage(targetStation, rawLine)
+		if err != nil {
+			return err
 		}
 	} else {
 		_ = clientManager.SendMessageTo(targetStation, rawLine)
@@ -324,6 +323,11 @@ func (c *ConnectionHandler) handleMessage(data []string, rawLine []byte) *Result
 		if result != nil {
 			return result
 		}
+	} else if strings.HasPrefix(targetStation, "*") {
+		// 广播消息
+		if targetStation == string(AllSup) {
+			clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToSup)
+		}
 	} else {
 		_ = clientManager.SendMessageTo(targetStation, rawLine)
 	}
@@ -374,8 +378,8 @@ func (c *ConnectionHandler) handleAtcEditPlan(data []string, _ []byte) *Result {
 		return resultError(Syntax, false, "")
 	}
 	targetCallsign := data[2]
-	client, err := clientManager.GetClient(targetCallsign)
-	if err != nil {
+	client, ok := clientManager.GetClient(targetCallsign)
+	if !ok {
 		return resultError(Syntax, false, c.Client.Callsign)
 	}
 	if client.FlightPlan == nil {
@@ -384,7 +388,7 @@ func (c *ConnectionHandler) handleAtcEditPlan(data []string, _ []byte) *Result {
 	if !config.Server.General.SimulatorServer {
 		client.FlightPlan.Locked = true
 	}
-	err = client.FlightPlan.UpdateFlightPlan(data[1:], true)
+	err := client.FlightPlan.UpdateFlightPlan(data[1:], true)
 	if err != nil {
 		return resultError(Syntax, false, c.Client.Callsign)
 	}
@@ -406,12 +410,11 @@ func (c *ConnectionHandler) handleKillClient(data []string, _ []byte) *Result {
 		return resultError(Syntax, false, "")
 	}
 	targetStation := data[1]
-	client, err := clientManager.GetClient(targetStation)
-	if err != nil {
+	client, ok := clientManager.GetClient(targetStation)
+	if !ok {
 		return resultError(Syntax, false, c.Client.Callsign)
 	}
 	time.AfterFunc(time.Second, func() {
-		_ = client.Socket.Close()
 		client.MarkedDisconnect(false)
 	})
 	return resultSuccess()

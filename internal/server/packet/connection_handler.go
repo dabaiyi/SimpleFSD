@@ -71,13 +71,7 @@ func (c *ConnectionHandler) HandleConnection() {
 		c.handleLine(line)
 	}
 
-	if err := scanner.Err(); err != nil {
-		logger.InfoF("Read error: %v", err.Error())
-	}
-
 	if c.Client != nil {
-		logger.InfoF("[%s] Disconnected, session will be saved for %s",
-			c.Client.Callsign, config.Server.FSDServer.SessionCleanDuration.String())
 		c.Client.MarkedDisconnect(false)
 	}
 }

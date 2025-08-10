@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/half-nothing/fsd-server/internal/utils"
+	"strconv"
 )
 
 type FlightPlanId interface {
 	GetFlightPlan() (*FlightPlan, error)
+	String() string
 }
 
 type IntFlightPlanId int
@@ -27,6 +29,10 @@ func (id IntFlightPlanId) GetFlightPlan() (*FlightPlan, error) {
 
 }
 
+func (id IntFlightPlanId) String() string {
+	return strconv.Itoa(int(id))
+}
+
 func (id StringFlightPlanId) GetFlightPlan() (*FlightPlan, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
@@ -38,6 +44,10 @@ func (id StringFlightPlanId) GetFlightPlan() (*FlightPlan, error) {
 	}
 	return &flightPlan, nil
 
+}
+
+func (id StringFlightPlanId) String() string {
+	return string(id)
 }
 
 func CreateFlightPlan(user *User, callsign string, flightPlanData []string) (*FlightPlan, error) {

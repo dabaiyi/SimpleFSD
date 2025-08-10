@@ -14,6 +14,17 @@ func BroadcastToAtc(toClient, _ *Client) bool {
 	return toClient.IsAtc
 }
 
+func BroadcastToSup(toClient, _ *Client) bool {
+	if !toClient.IsAtc {
+		return false
+	}
+	if config.Server.FSDServer.SendWallopToADM {
+		return toClient.Rating >= Supervisor
+	} else {
+		return toClient.Rating == Supervisor
+	}
+}
+
 func BroadcastToClientInRange(toClient, fromClient *Client) bool {
 	if fromClient == nil {
 		return true
