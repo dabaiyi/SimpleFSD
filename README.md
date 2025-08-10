@@ -51,16 +51,27 @@ FSD支持计划同步, 计划锁定, 网页计划提交
       // 所以将这个开关命名为模拟机服务器开关
       "simulator_server": false,
       // 密码加密轮数
-      "bcrypt_cost": 12
+      "bcrypt_cost": 12,
+      // jwt对称加密秘钥
+      "jwt_secret": "123456",
+      // jwt秘钥过期时间
+      "jwt_expires_time": "1h",
+      // jwt刷新秘钥过期时间
+      // 该时间是在jwt秘钥过期时间之后的时间
+      // 比如两者都是1h, 那么刷新秘钥的过期时间就是2h
+      // 因为不可能你刷新秘钥比主密钥过期还早:(
+      "jwt_refresh_time": "1h"
     },
     // FSD服务器配置
     "fsd_server": {
       // FSD名称, 会被发送到连接到服务器的客户端作为motd消息
       "fsd_name": "Simple-Fsd",
       // FSD服务器监听地址
-      "host": "127.0.0.1",
+      "host": "0.0.0.0",
       // FSD服务器监听端口
       "port": 6809,
+      // 是否发送wallop消息到ADM
+      "send_wallop_to_adm": true,
       // FSD服务器心跳间隔
       "heartbeat_interval": "60s",
       // FSD服务器会话过期时间
