@@ -33,12 +33,12 @@ jobs:
           install-only: true
 
       - name: Compress executable file
-        run: upx -fq -9 ./fsd-server-linux-nightly
+        run: upx -fq -9 ./fsd-server-linux-amd64-nightly
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-nightly
-          path: ./fsd-server-linux-nightly
+          path: ./fsd-server-linux-amd64-nightly
 
   build-windows:
     runs-on: windows-latest
