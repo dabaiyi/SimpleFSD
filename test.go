@@ -1,33 +1,19 @@
 package main
 
 import (
-	"log"
-	"net"
+	"gopkg.in/gomail.v2"
 )
 
 func main() {
-	ln, err := net.Listen("tcp", "0.0.0.0:6809")
-	if err != nil {
-		log.Fatal(err)
+	m := gomail.NewMessage()
+	m.SetHeader("From", "noreply@half-nothing.cn")
+	m.SetHeader("To", "half_nothing@163.com")
+	m.SetHeader("Subject", "您的验证码")
+	m.SetBody("text/html", "<p>您的邮箱验证码是456324, 请勿泄露给他人</p>\n<p>验证码3分钟内有效, 请尽快使用</p>") // 支持HTML
+
+	d := gomail.NewDialer("gz-smtp.qcloudmail.com", 465, "noreply@half-nothing.cn", "3suOBsIV8yiz") // QQ邮箱示例
+
+	if err := d.DialAndSend(m); err != nil {
+		panic(err)
 	}
-	log.Println("Listening on :6809")
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Println("Accept error:", err)
-			continue
-		}
-		log.Printf("Accepted connection from: %s", conn.RemoteAddr())
-		go handleConnection(conn)
-	}
-}
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil {
-		log.Println("Read error:", err)
-		return
-	}
-	log.Printf("Received %d bytes: %s", n, string(buf[:n]))
 }

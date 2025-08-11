@@ -2,38 +2,172 @@ package server
 
 import (
 	"errors"
+	"github.com/golang-jwt/jwt/v5"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/controller"
 	gs "github.com/half-nothing/fsd-server/internal/server/grpc"
+	mid "github.com/half-nothing/fsd-server/internal/server/middleware"
 	"github.com/half-nothing/fsd-server/internal/server/packet"
+	"github.com/half-nothing/fsd-server/internal/server/service"
+	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/gommon/log"
+	slogecho "github.com/samber/slog-echo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+	"io"
+	"log/slog"
 	"net"
 	"net/http"
+	"time"
+)
+
+var (
+	ErrMissingOrMalformedJwt = service.CodeStatus{StatusName: "MISSING_OR_MALFORMED_JWT", Description: "缺少JWT令牌或者令牌格式错误", HttpCode: service.BadRequest}
+	ErrInvalidOrExpiredJwt   = service.CodeStatus{StatusName: "INVALID_OR_EXPIRED_JWT", Description: "无效或过期的JWT令牌", HttpCode: service.Unauthorized}
+	ErrUnknown               = service.CodeStatus{StatusName: "UNKNOWN_JWT_ERROR", Description: "未知的JWT解析错误", HttpCode: service.ServerInternalError}
 )
 
 func StartHttpServer() {
 	config, _ := c.GetConfig()
+	_ = service.GetEmailManager()
 	e := echo.New()
-	if config.Server.HttpServer.EnableSSL && (config.Server.HttpServer.CertFile == "" || config.Server.HttpServer.KeyFile == "") {
-		c.WarnF("https server request a cert file and a key file, fallback to http server")
-		config.Server.HttpServer.EnableSSL = false
+	e.Logger.SetOutput(io.Discard)
+	e.Logger.SetLevel(log.OFF)
+
+	if config.Server.HttpServer.SSL.Enable {
+		if config.Server.HttpServer.SSL.CertFile == "" || config.Server.HttpServer.SSL.KeyFile == "" {
+			c.WarnF("HTTPS server requires both cert and key files. Cert: %s, Key: %s. Falling back to HTTP",
+				config.Server.HttpServer.SSL.CertFile,
+				config.Server.HttpServer.SSL.KeyFile)
+			config.Server.HttpServer.SSL.Enable = false
+		}
+	} else if config.Server.HttpServer.SSL.EnableHSTS {
+		c.Warn("You can enable HSTS when ssl is not enable!")
+		config.Server.HttpServer.SSL.EnableHSTS = false
+		config.Server.HttpServer.SSL.HstsExpiredTime = 0
+		config.Server.HttpServer.SSL.IncludeDomain = true
 	}
 
+	switch config.Server.HttpServer.ProxyType {
+	case 0:
+		e.IPExtractor = echo.ExtractIPDirect()
+	case 1:
+		e.IPExtractor = echo.ExtractIPFromXFFHeader()
+	case 2:
+		e.IPExtractor = echo.ExtractIPFromRealIPHeader()
+	default:
+		c.WarnF("Invalid proxy type %d, using default (direct)", config.Server.HttpServer.ProxyType)
+		e.IPExtractor = echo.ExtractIPDirect()
+	}
+
+	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{Timeout: 30 * time.Second}))
+	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
+		LogErrorFunc: func(ctx echo.Context, err error, stack []byte) error {
+			c.ErrorF("Recovered from a fatal error: %v, stack: %s", err, string(stack))
+			return err
+		},
+	}))
+
+	loggerConfig := slogecho.Config{
+		DefaultLevel:     slog.LevelInfo,
+		ClientErrorLevel: slog.LevelWarn,
+		ServerErrorLevel: slog.LevelError,
+	}
+	e.Use(slogecho.NewWithConfig(slog.Default(), loggerConfig))
+	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
+		XSSProtection:         "1; mode=block",
+		ContentTypeNosniff:    "nosniff",
+		XFrameOptions:         "SAMEORIGIN",
+		HSTSMaxAge:            config.Server.HttpServer.SSL.HstsExpiredTime,
+		HSTSExcludeSubdomains: !config.Server.HttpServer.SSL.IncludeDomain,
+	}))
+	e.Use(middleware.CORS())
+	e.Use(middleware.BodyLimit("64KB"))
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Level: 5,
+	}))
+
+	if config.Server.HttpServer.RateLimit <= 0 {
+		c.WarnF("Invalid rate limit value %d, using default 100", config.Server.HttpServer.RateLimit)
+		config.Server.HttpServer.RateLimit = 100
+	}
+
+	if config.Server.HttpServer.RateLimitDuration <= 0 {
+		c.WarnF("Invalid rate limit duration %v, using default 1m", config.Server.HttpServer.RateLimitDuration)
+		config.Server.HttpServer.RateLimitDuration = time.Minute
+	}
+
+	ipPathLimiter := mid.NewSlidingWindowLimiter(
+		config.Server.HttpServer.RateLimitDuration,
+		config.Server.HttpServer.RateLimit,
+	)
+	cleanupInterval := config.Server.HttpServer.RateLimitDuration * 2
+	if cleanupInterval > time.Hour {
+		cleanupInterval = time.Hour
+		c.InfoF("Limiting cleanup interval to 1 hour for efficiency")
+	}
+	ipPathLimiter.StartCleanup(cleanupInterval)
+
+	e.Use(mid.RateLimitMiddleware(ipPathLimiter, mid.CombinedKeyFunc))
+
+	jwtConfig := echojwt.Config{
+		SigningKey:  []byte(config.Server.HttpServer.JWT.Secret),
+		TokenLookup: "header:Authorization:Bearer ",
+		NewClaimsFunc: func(c echo.Context) jwt.Claims {
+			return new(service.Claims)
+		},
+		ErrorHandler: func(c echo.Context, err error) error {
+			var data *service.ApiResponse[any]
+			switch {
+			case errors.Is(err, echojwt.ErrJWTMissing):
+				data = service.NewApiResponse[any](&ErrMissingOrMalformedJwt, service.Unsatisfied, nil)
+			case errors.Is(err, echojwt.ErrJWTInvalid):
+				data = service.NewApiResponse[any](&ErrInvalidOrExpiredJwt, service.Unsatisfied, nil)
+			default:
+				data = service.NewApiResponse[any](&ErrUnknown, service.Unsatisfied, nil)
+			}
+
+			return data.Response(c)
+		},
+	}
+
+	jwtMiddleware := echojwt.WithConfig(jwtConfig)
+
 	apiGroup := e.Group("/api")
-	apiGroup.POST("/users", controller.UserRegister)
+	apiGroup.POST("/sessions", controller.UserLogin)
+	apiGroup.POST("/codes", controller.SendVerifyEmail)
+	apiGroup.GET("/profile", controller.GetCurrentUserProfile, jwtMiddleware)
+
+	userGroup := apiGroup.Group("/users")
+	userGroup.POST("", controller.UserRegister)
+	userGroup.GET("/availability", controller.CheckUserAvailability)
 
 	c.GetCleaner().Add(NewHttpServerShutdownCallback(e))
 
-	if config.Server.HttpServer.EnableSSL {
-		if err := e.StartTLS(config.Server.HttpServer.Address, config.Server.HttpServer.CertFile, config.Server.HttpServer.KeyFile); !errors.Is(err, http.ErrServerClosed) {
-			c.Fatal("Error %v", err)
-		}
+	protocol := "http"
+	if config.Server.HttpServer.SSL.Enable {
+		protocol = "https"
+	}
+	c.InfoF("Starting %s server on %s", protocol, config.Server.HttpServer.Address)
+	c.InfoF("Rate limit: %d requests per %v",
+		config.Server.HttpServer.RateLimit,
+		config.Server.HttpServer.RateLimitDuration)
+
+	var err error
+	if config.Server.HttpServer.SSL.Enable {
+		err = e.StartTLS(
+			config.Server.HttpServer.Address,
+			config.Server.HttpServer.SSL.CertFile,
+			config.Server.HttpServer.SSL.KeyFile,
+		)
 	} else {
-		if err := e.Start(config.Server.HttpServer.Address); !errors.Is(err, http.ErrServerClosed) {
-			c.Fatal("Error %v", err)
-		}
+		err = e.Start(config.Server.HttpServer.Address)
+	}
+
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		c.Fatal("Http server error: %v", err)
 	}
 }
 

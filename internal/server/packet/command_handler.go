@@ -129,8 +129,8 @@ func (c *ConnectionHandler) handleAddPilot(data []string, rawLine []byte) *Resul
 		c.Client.FlightPlan.FromWeb && callsign != c.Client.FlightPlan.Callsign {
 		c.Client.SendLine(makePacket(Message, "FPlanManager", callsign,
 			fmt.Sprintf("Seems you are connect with callsign(%s), "+
-				"but we found a flightplan submit by web which has callsign(%s), "+
-				"please check it.", callsign, c.Client.FlightPlan.Callsign)))
+				"but we found a flightplan submit by web at %s which has callsign(%s), "+
+				"please check it.", c.Client.FlightPlan.UpdatedAt.String(), callsign, c.Client.FlightPlan.Callsign)))
 	}
 	return resultSuccess()
 }
@@ -248,7 +248,7 @@ func (c *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *Re
 	// 如果发送目标是一个频率
 	if strings.HasPrefix(targetStation, "@") {
 		// 如果目标频率是94835
-		if targetStation == specialFrequency {
+		if !config.Server.General.SimulatorServer && targetStation == specialFrequency {
 			// 这里并不是发给服务器的, 所以如果客户端没有权限, 直接返回就行
 			if !c.Client.CheckFacility(allowAtcFacility) {
 				return resultSuccess()
@@ -262,8 +262,7 @@ func (c *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *Re
 					return resultSuccess()
 				}
 				cruiseAltitude := utils.StrToInt(data[4], 0)
-				err := client.FlightPlan.UpdateCruiseAltitude(fmt.Sprintf("FL%03d", cruiseAltitude/100), true)
-				if err != nil {
+				if err := client.FlightPlan.UpdateCruiseAltitude(fmt.Sprintf("FL%03d", cruiseAltitude/100), true); err != nil {
 					// 这里并不是发给服务器的, 所以如果出错, 直接返回就行
 					return resultSuccess()
 				}
@@ -349,8 +348,7 @@ func (c *ConnectionHandler) handlePlan(data []string, rawLine []byte) *Result {
 	if commandLength < 17 {
 		return resultError(Syntax, false, "")
 	}
-	err := c.Client.UpdateFlightPlan(data)
-	if err != nil {
+	if err := c.Client.UpdateFlightPlan(data); err != nil {
 		return resultError(Syntax, false, c.Client.Callsign)
 	}
 	if !c.Client.FlightPlan.Locked {
@@ -385,11 +383,8 @@ func (c *ConnectionHandler) handleAtcEditPlan(data []string, _ []byte) *Result {
 	if client.FlightPlan == nil {
 		return resultError(NoFlightPlan, false, c.Client.Callsign)
 	}
-	if !config.Server.General.SimulatorServer {
-		client.FlightPlan.Locked = true
-	}
-	err := client.FlightPlan.UpdateFlightPlan(data[1:], true)
-	if err != nil {
+	client.FlightPlan.Locked = !config.Server.General.SimulatorServer
+	if err := client.FlightPlan.UpdateFlightPlan(data[1:], true); err != nil {
 		return resultError(Syntax, false, c.Client.Callsign)
 	}
 	clientManager.BroadcastMessage([]byte(client.FlightPlan.ToString(string(AllATC))),

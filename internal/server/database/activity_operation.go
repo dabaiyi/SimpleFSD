@@ -4,6 +4,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"gorm.io/gorm"
 	"time"
 )
 
@@ -69,10 +70,50 @@ func (ac *Activity) Save() error {
 }
 
 func (ac *Activity) Delete() error {
+	return database.Transaction(func(tx *gorm.DB) error {
+		ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+		defer cancel()
+
+		if err := tx.WithContext(ctx).
+			Where("activity_id = ?", ac.ID).
+			Delete(&ActivityPilot{}).Error; err != nil {
+			return fmt.Errorf("fail to delete activity pilots: %w", err)
+		}
+
+		if err := tx.WithContext(ctx).
+			Where("activity_id = ?", ac.ID).
+			Delete(&ActivityATC{}).Error; err != nil {
+			return fmt.Errorf("fail to delete activity atcs: %w", err)
+		}
+
+		if err := tx.WithContext(ctx).Delete(ac).Error; err != nil {
+			return fmt.Errorf("fail to delete activity: %w", err)
+		}
+
+		return nil
+	})
+}
+
+func (ac *Activity) GetPilots() ([]ActivityPilot, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	err := database.WithContext(ctx).Delete(ac).Error
-	return err
+
+	var pilots []ActivityPilot
+	err := database.WithContext(ctx).
+		Where("activity_id = ?", ac.ID).
+		Find(&pilots).Error
+	return pilots, err
+}
+
+func (ac *Activity) GetATCs() ([]ActivityATC, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+
+	var atcs []ActivityATC
+	err := database.WithContext(ctx).
+		Where("activity_id = ?", ac.ID).
+		Find(&atcs).Error
+	return atcs, err
 }
 
 func (ac *Activity) setStatus(status ActivityStatus) error {
@@ -100,13 +141,6 @@ func (acp *ActivityPilot) Save() error {
 	defer cancel()
 
 	err := database.WithContext(ctx).Save(acp).Error
-	return err
-}
-
-func (acp *ActivityPilot) Delete() error {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
-	err := database.WithContext(ctx).Delete(acp).Error
 	return err
 }
 
@@ -146,13 +180,6 @@ func (aca *ActivityATC) Cancel() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	err := database.WithContext(ctx).Model(aca).Update("cid", 0).Error
-	return err
-}
-
-func (aca *ActivityATC) Delete() error {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
-	err := database.WithContext(ctx).Delete(aca).Error
 	return err
 }
 

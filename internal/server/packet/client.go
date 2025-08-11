@@ -49,17 +49,11 @@ type Client struct {
 
 func NewClient(callsign string, rating Rating, user *database.User, protocol int, realName string, socket net.Conn, isAtc bool) *Client {
 	var flightPlan *database.FlightPlan = nil
-	if !isAtc {
-		var flightPlanId database.FlightPlanId
-		if config.Server.General.SimulatorServer {
-			flightPlanId = database.StringFlightPlanId(callsign)
-		} else {
-			flightPlanId = database.IntFlightPlanId(user.Cid)
-		}
+	if !isAtc && !config.Server.General.SimulatorServer {
 		var err error
-		flightPlan, err = flightPlanId.GetFlightPlan()
+		flightPlan, err = database.GetFlightPlan(user.Cid)
 		if err != nil {
-			logger.WarnF("Fail to get flight plan for %s: %v", flightPlanId.String(), err)
+			logger.WarnF("Fail to get flight plan for %s(%d): %v", callsign, user.Cid, err)
 		}
 	}
 	return &Client{
@@ -73,7 +67,7 @@ func NewClient(callsign string, rating Rating, user *database.User, protocol int
 		Socket:         socket,
 		Position:       [4]Position{{0, 0}, {0, 0}, {0, 0}, {0, 0}},
 		SimType:        0,
-		Transponder:    9999,
+		Transponder:    2000,
 		Altitude:       0,
 		GroundSpeed:    0,
 		Frequency:      99998,
@@ -103,15 +97,18 @@ func (c *Client) Delete() {
 			c.reconnectTimer = nil
 		}
 
-		if err := c.History.End(); err != nil {
-			logger.WarnF("[%s] Failed to end history: %v", c.Callsign, err)
+		if c.IsAtc || !config.Server.General.SimulatorServer {
+			if err := c.History.End(); err != nil {
+				logger.WarnF("[%s] Failed to end history: %v", c.Callsign, err)
+			}
 		}
 
 		if c.IsAtc {
 			if err := c.User.AddAtcTime(c.History.OnlineTime); err != nil {
 				logger.WarnF("[%s] Failed to add ATC time: %v", c.Callsign, err)
 			}
-		} else {
+		} else if !config.Server.General.SimulatorServer {
+			// 如果不是模拟机服务器, 则写入机组连线时长
 			if err := c.User.AddPilotTime(c.History.OnlineTime); err != nil {
 				logger.WarnF("[%s] Failed to add pilot time: %v", c.Callsign, err)
 			}
@@ -186,6 +183,10 @@ func (c *Client) UpdateFlightPlan(flightPlanData []string) error {
 		c.FlightPlan = flightPlan
 		return nil
 	}
+	// 如果是模拟机服务器, 只创建就行
+	if config.Server.General.SimulatorServer {
+		return nil
+	}
 	if c.FlightPlan.Locked {
 		departureAirport := flightPlanData[5]
 		arrivalAirport := flightPlanData[9]
@@ -251,6 +252,24 @@ func (c *Client) SendError(result *Result) {
 			c.Socket = nil
 		}
 		c.disconnect.Store(true)
+	}
+}
+
+func (c *Client) SendLineWithoutLog(line []byte) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	if c.disconnect.Load() || c.Socket == nil {
+		logger.DebugF("[%s] Attempted send to disconnected client", c.Callsign)
+		return
+	}
+
+	if !bytes.HasSuffix(line, splitSign) {
+		line = append(line, splitSign...)
+	}
+
+	if _, err := c.Socket.Write(line); err != nil {
+		logger.WarnF("[%s] Failed to send data: %v", c.Callsign, err)
 	}
 }
 

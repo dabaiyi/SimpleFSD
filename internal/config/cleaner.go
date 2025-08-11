@@ -28,6 +28,12 @@ func GetCleaner() *Cleaner {
 	return cleanerInstance
 }
 
+func ReverseForEach[T any](slice []T, f func(index int, value T)) {
+	for i := len(slice) - 1; i >= 0; i-- {
+		f(i, slice[i])
+	}
+}
+
 func (c *Cleaner) Add(callable Callable) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -36,6 +42,7 @@ func (c *Cleaner) Add(callable Callable) {
 		return
 	}
 	c.cleaners = append(c.cleaners, callable)
+	DebugF("Adding cleaner #%d (%T)", len(c.cleaners), callable)
 }
 
 func (c *Cleaner) Clean() {
@@ -48,17 +55,15 @@ func (c *Cleaner) Clean() {
 	DebugF("Starting cleanup of %d registered functions", len(cleanersCopy))
 
 	var errs []error
-	for i, callable := range cleanersCopy {
-		func(idx int, c Callable) { // 使用匿名函数确保defer在每次迭代执行
-			DebugF("Invoking cleaner #%d (%T)", idx+1, c)
-			timeoutCtx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancelFunc() // 确保每次调用后取消上下文
-			if err := c.Invoke(timeoutCtx); err != nil {
-				ErrorF("Cleaner #%d (%T) failed: %v", idx+1, c, err) // 记录类型和错误
-				errs = append(errs, err)
-			}
-		}(i, callable)
-	}
+	ReverseForEach(cleanersCopy, func(idx int, c Callable) { // 使用匿名函数确保defer在每次迭代执行
+		DebugF("Invoking cleaner #%d (%T)", idx+1, c)
+		timeoutCtx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancelFunc() // 确保每次调用后取消上下文
+		if err := c.Invoke(timeoutCtx); err != nil {
+			ErrorF("Cleaner #%d (%T) failed: %v", idx+1, c, err) // 记录类型和错误
+			errs = append(errs, err)
+		}
+	})
 
 	if len(errs) > 0 {
 		ErrorF("%d errors occurred during cleanup:", len(errs))

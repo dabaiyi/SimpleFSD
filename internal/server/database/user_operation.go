@@ -2,7 +2,16 @@ package database
 
 import (
 	"context"
+	"errors"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+)
+
+var (
+	ErrUserNotFound    = errors.New("user does not exist")
+	ErrIdentifierTaken = errors.New("user identifiers have been used")
+	ErrPasswordEncode  = errors.New("password encode error")
+	ErrIdentifierCheck = errors.New("identifier check error")
 )
 
 type UserId interface {
@@ -16,8 +25,12 @@ func (id IntUserId) GetUser() (*User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	user := User{}
-	if err := database.WithContext(ctx).Where("cid = ?", id).First(&user).Error; err != nil {
-		return nil, err
+	err := database.WithContext(ctx).
+		Where("cid = ?", id).
+		First(&user).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
 	}
 	return &user, nil
 }
@@ -26,14 +39,21 @@ func (id StringUserId) GetUser() (*User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	user := User{}
-	if err := database.WithContext(ctx).Where("username = ? or email = ?", id, id).First(&user).Error; err != nil {
-		return nil, err
+	err := database.WithContext(ctx).
+		Where("username = ? OR email = ?", id, id).
+		First(&user).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
 	}
 	return &user, nil
 }
 
-func NewUser(username string, email string, cid int, password string) *User {
-	encodePassword, _ := bcrypt.GenerateFromPassword([]byte(password), config.Server.General.BcryptCost)
+func NewUser(username string, email string, cid int, password string) (*User, error) {
+	encodePassword, err := bcrypt.GenerateFromPassword([]byte(password), config.Server.General.BcryptCost)
+	if err != nil {
+		return nil, ErrPasswordEncode
+	}
 	return &User{
 		Username:       username,
 		Email:          email,
@@ -44,25 +64,62 @@ func NewUser(username string, email string, cid int, password string) *User {
 		Permission:     0,
 		TotalPilotTime: 0,
 		TotalAtcTime:   0,
-	}
+	}, nil
 }
 
-func AddUser(user *User) error {
+func (user *User) addUser(tx *gorm.DB) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	return database.WithContext(ctx).Create(user).Error
+	return tx.WithContext(ctx).Create(user).Error
+}
+
+func (user *User) AddUser() error {
+	return database.Transaction(func(tx *gorm.DB) error {
+		taken, err := isUserIdentifierTaken(tx, user.Cid, user.Username, user.Email)
+		if err != nil {
+			return ErrIdentifierCheck
+		}
+
+		if taken {
+			return ErrIdentifierTaken
+		}
+
+		return user.addUser(tx)
+	})
+}
+
+func isUserIdentifierTaken(tx *gorm.DB, cid int, username, email string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+
+	var count int64
+	err := tx.WithContext(ctx).
+		Model(&User{}).
+		Where("cid = ? OR username = ? OR email = ?", cid, username, email).
+		Count(&count).Error
+
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+// IsUserIdentifierTaken 检查用户唯一标识是否已存在（cid/username/email任一重复即返回true）
+func IsUserIdentifierTaken(cid int, username, email string) (bool, error) {
+	return isUserIdentifierTaken(database, cid, username, email)
 }
 
 func (user *User) AddAtcTime(seconds int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	return database.WithContext(ctx).Model(user).Update("total_atc_time", user.TotalAtcTime+seconds).Error
+	return database.WithContext(ctx).Model(user).Update("total_atc_time", gorm.Expr("total_atc_time + ?", seconds)).Error
 }
 
 func (user *User) AddPilotTime(seconds int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	return database.WithContext(ctx).Model(user).Update("total_pilot_time", user.TotalPilotTime+seconds).Error
+	return database.WithContext(ctx).Model(user).Update("total_pilot_time", gorm.Expr("total_pilot_time + ?", seconds)).Error
 }
 
 func (user *User) Save() error {

@@ -4,54 +4,114 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/labstack/gommon/log"
+	"gopkg.in/gomail.v2"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"html/template"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"sync"
 	"time"
 )
 
+const (
+	AirportDataFileUrl              = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/data/airport.json"
+	EmailVerifyTemplateFileUrl      = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/email_verify.template"
+	ATCRatingChangeTemplateFileUrl  = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/atc_rating_change.template"
+	PermissionChangeTemplateFileUrl = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/permission_change.template"
+)
+
+type AirportData struct {
+	Lat          float64 `json:"lat"`
+	Lon          float64 `json:"lon"`
+	Alt          float64 `json:"alt"`
+	AirportRange int     `json:"airport_range"`
+}
+
 type OtherConfig struct {
-	SimulatorServer    bool          `json:"simulator_server"`
-	BcryptCost         int           `json:"bcrypt_cost"`
-	JWTSecret          string        `json:"jwt_secret"`
-	JWTExpiresTime     string        `json:"jwt_expires_time"`
-	JWTExpiresDuration time.Duration `json:"-"`
-	JWTRefreshTime     string        `json:"jwt_refresh_time"`
-	JWTRefreshDuration time.Duration `json:"-"`
+	SimulatorServer bool `json:"simulator_server"`
+	BcryptCost      int  `json:"bcrypt_cost"`
 }
 
 type FSDServerConfig struct {
-	FSDName              string        `json:"fsd_name"` // 应用名称
-	Host                 string        `json:"host"`
-	Port                 uint64        `json:"port"`
-	Address              string        `json:"-"`
-	SendWallopToADM      bool          `json:"send_wallop_to_adm"`
-	HeartbeatInterval    string        `json:"heartbeat_interval"`
-	HeartbeatDuration    time.Duration `json:"-"`
-	SessionCleanTime     string        `json:"session_clean_time"`    // 会话保留时间
-	SessionCleanDuration time.Duration `json:"-"`                     // 内部使用字段
-	MaxWorkers           int           `json:"max_workers"`           // 并发线程数
-	MaxBroadcastWorkers  int           `json:"max_broadcast_workers"` // 广播并发线程数
-	Motd                 []string      `json:"motd"`
+	FSDName              string                 `json:"fsd_name"` // 应用名称
+	Host                 string                 `json:"host"`
+	Port                 uint64                 `json:"port"`
+	Address              string                 `json:"-"`
+	AirportDataFile      string                 `json:"airport_data_file"`
+	AirportData          map[string]AirportData `json:"-"`
+	SendWallopToADM      bool                   `json:"send_wallop_to_adm"`
+	HeartbeatInterval    string                 `json:"heartbeat_interval"`
+	HeartbeatDuration    time.Duration          `json:"-"`
+	SessionCleanTime     string                 `json:"session_clean_time"`    // 会话保留时间
+	SessionCleanDuration time.Duration          `json:"-"`                     // 内部使用字段
+	MaxWorkers           int                    `json:"max_workers"`           // 并发线程数
+	MaxBroadcastWorkers  int                    `json:"max_broadcast_workers"` // 广播并发线程数
+	Motd                 []string               `json:"motd"`
+}
+
+type JWTConfig struct {
+	Secret          string        `json:"secret"`
+	ExpiresTime     string        `json:"expires_time"`
+	ExpiresDuration time.Duration `json:"-"`
+	RefreshTime     string        `json:"refresh_time"`
+	RefreshDuration time.Duration `json:"-"`
+}
+
+type SSLConfig struct {
+	Enable          bool   `json:"enable"`
+	EnableHSTS      bool   `json:"enable_hsts"`
+	HstsExpiredTime int    `json:"hsts_expired_time"`
+	IncludeDomain   bool   `json:"include_domain"`
+	CertFile        string `json:"cert_file"`
+	KeyFile         string `json:"key_file"`
+}
+
+type EmailTemplateConfig struct {
+	EmailVerifyTemplateFile      string             `json:"email_verify_template_file"`
+	EmailVerifyTemplate          *template.Template `json:"-"`
+	ATCRatingChangeTemplateFile  string             `json:"atc_rating_change_template_file"`
+	ATCRatingChangeTemplate      *template.Template `json:"-"`
+	PermissionChangeTemplateFile string             `json:"permission_change_template_file"`
+	PermissionChangeTemplate     *template.Template `json:"-"`
+}
+
+type EmailConfig struct {
+	Host                  string              `json:"host"`
+	Port                  int                 `json:"port"`
+	EmailServer           *gomail.Dialer      `json:"-"`
+	Username              string              `json:"username"`
+	Password              string              `json:"password"`
+	VerifyExpiredTime     string              `json:"verify_expired_time"`
+	VerifyExpiredDuration time.Duration       `json:"-"`
+	SendInterval          string              `json:"send_interval"`
+	SendDuration          time.Duration       `json:"-"`
+	Template              EmailTemplateConfig `json:"template"`
 }
 
 type HttpServerConfig struct {
-	Enabled       bool          `json:"enabled"`
-	Host          string        `json:"host"`
-	Port          uint64        `json:"port"`
-	Address       string        `json:"-"`
-	MaxWorkers    int           `json:"max_workers"` // 并发线程数
-	CacheTime     string        `json:"cache_time"`
-	CacheDuration time.Duration `json:"-"`
-	EnableSSL     bool          `json:"enable_ssl"`
-	CertFile      string        `json:"cert_file"`
-	KeyFile       string        `json:"key_file"`
+	Enabled           bool          `json:"enabled"`
+	Host              string        `json:"host"`
+	Port              uint64        `json:"port"`
+	Address           string        `json:"-"`
+	MaxWorkers        int           `json:"max_workers"` // 并发线程数
+	CacheTime         string        `json:"cache_time"`
+	CacheDuration     time.Duration `json:"-"`
+	ProxyType         int           `json:"proxy_type"`
+	RateLimit         int           `json:"rate_limit"`
+	RateLimitWindow   string        `json:"rate_limit_window"`
+	RateLimitDuration time.Duration `json:"-"`
+	Email             EmailConfig   `json:"email"`
+	JWT               JWTConfig     `json:"jwt"`
+	SSL               SSLConfig     `json:"ssl"`
 }
 
 type GRPCServerConfig struct {
@@ -104,7 +164,7 @@ const (
 
 var (
 	config              *Config
-	configOnce          sync.Once // 新增同步控制
+	configOnce          sync.Once
 	configError         error
 	allowedDatabaseType = []DatabaseType{MySQL, PostgreSQL, SQLite}
 )
@@ -117,14 +177,13 @@ func newConfig() *Config {
 			General: OtherConfig{
 				SimulatorServer: false,
 				BcryptCost:      12,
-				JWTSecret:       "123456",
-				JWTExpiresTime:  "1h",
-				JWTRefreshTime:  "1h",
 			},
 			FSDServer: FSDServerConfig{
 				FSDName:             "Simple-Fsd",
 				Host:                "0.0.0.0",
 				Port:                6809,
+				AirportDataFile:     "data/airport.json",
+				AirportData:         make(map[string]AirportData),
 				SendWallopToADM:     true,
 				HeartbeatInterval:   "60s",
 				SessionCleanTime:    "40s",
@@ -133,14 +192,37 @@ func newConfig() *Config {
 				Motd:                make([]string, 0),
 			},
 			HttpServer: HttpServerConfig{
-				Enabled:    false,
-				Host:       "0.0.0.0",
-				Port:       6810,
-				MaxWorkers: 128,
-				CacheTime:  "15s",
-				EnableSSL:  false,
-				CertFile:   "",
-				KeyFile:    "",
+				Enabled:         false,
+				Host:            "0.0.0.0",
+				Port:            6810,
+				MaxWorkers:      128,
+				CacheTime:       "15s",
+				ProxyType:       0,
+				RateLimit:       100,
+				RateLimitWindow: "1m",
+				Email: EmailConfig{
+					Host:              "smtp.qq.com",
+					Port:              465,
+					Username:          "example@qq.com",
+					Password:          "123456",
+					VerifyExpiredTime: "5m",
+					SendInterval:      "1m",
+					Template: EmailTemplateConfig{
+						EmailVerifyTemplateFile:      "template/email_verify.template",
+						ATCRatingChangeTemplateFile:  "template/atc_rating_change.template",
+						PermissionChangeTemplateFile: "template/permission_change.template",
+					},
+				},
+				JWT: JWTConfig{
+					Secret:      "123456",
+					ExpiresTime: "1h",
+					RefreshTime: "1h",
+				},
+				SSL: SSLConfig{
+					Enable:   false,
+					CertFile: "",
+					KeyFile:  "",
+				},
 			},
 			GRPCServer: GRPCServerConfig{
 				Enabled:   false,
@@ -210,6 +292,47 @@ func (c *Config) handleConfigVersion() error {
 	return nil
 }
 
+func createFileWithContent(filePath string, content []byte) error {
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(filePath, content, 0644)
+}
+
+func cachedContent(filePath, url string) ([]byte, error) {
+	if content, err := os.ReadFile(filePath); err == nil {
+		return content, nil
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("file read error: %w", err)
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP error: %s", resp.Status)
+	}
+
+	content, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response error: %w", err)
+	}
+
+	if err := createFileWithContent(filePath, content); err != nil {
+		return nil, fmt.Errorf("file write error: %w", err)
+	}
+
+	return content, nil
+}
+
 func (c *Config) handleConfig() error {
 	config.Database.DBType = DatabaseType(config.Database.Type)
 	if !slices.Contains(allowedDatabaseType, config.Database.DBType) {
@@ -221,40 +344,93 @@ func (c *Config) handleConfig() error {
 	}
 
 	var err error
+
+	config.Server.FSDServer.Address = fmt.Sprintf("%s:%d", config.Server.FSDServer.Host, config.Server.FSDServer.Port)
+
+	if bytes, err := cachedContent(config.Server.FSDServer.AirportDataFile, AirportDataFileUrl); err != nil {
+		log.Warnf("fail to load airport data, arrival airport check disable, %v", err)
+		config.Server.FSDServer.AirportData = nil
+	} else if err := json.Unmarshal(bytes, &config.Server.FSDServer.AirportData); err != nil {
+		return fmt.Errorf("invalid json file %s, %v", config.Server.FSDServer.AirportDataFile, err)
+	}
+
 	config.Server.FSDServer.SessionCleanDuration, err = time.ParseDuration(config.Server.FSDServer.SessionCleanTime)
 	if err != nil {
-		return fmt.Errorf("invalid json field session_clean_time, %v", err)
+		return fmt.Errorf("invalid json field fsd_server.session_clean_time, %v", err)
 	}
 
 	config.Server.FSDServer.HeartbeatDuration, err = time.ParseDuration(config.Server.FSDServer.HeartbeatInterval)
 	if err != nil {
-		return fmt.Errorf("invalid json field heartbead_interval, %v", err)
+		return fmt.Errorf("invalid json field fsd_server.heartbead_interval, %v", err)
 	}
 
-	config.Server.FSDServer.Address = fmt.Sprintf("%s:%d", config.Server.FSDServer.Host, config.Server.FSDServer.Port)
+	if config.Server.HttpServer.Enabled {
+		config.Server.HttpServer.Address = fmt.Sprintf("%s:%d", config.Server.HttpServer.Host, config.Server.HttpServer.Port)
 
-	config.Server.HttpServer.CacheDuration, err = time.ParseDuration(config.Server.HttpServer.CacheTime)
-	if err != nil {
-		return fmt.Errorf("invalid json field http_server.cache_time, %v", err)
+		config.Server.HttpServer.CacheDuration, err = time.ParseDuration(config.Server.HttpServer.CacheTime)
+		if err != nil {
+			return fmt.Errorf("invalid json field http_server.email.cache_time, %v", err)
+		}
+
+		config.Server.HttpServer.RateLimitDuration, err = time.ParseDuration(config.Server.HttpServer.RateLimitWindow)
+		if err != nil {
+			return fmt.Errorf("invalid json field http_server.rate_limit_window, %v", err)
+		}
+
+		config.Server.HttpServer.Email.VerifyExpiredDuration, err = time.ParseDuration(config.Server.HttpServer.Email.VerifyExpiredTime)
+		if err != nil {
+			return fmt.Errorf("invalid json field http_server.email.verify_expired_time, %v", err)
+		}
+
+		config.Server.HttpServer.Email.SendDuration, err = time.ParseDuration(config.Server.HttpServer.Email.SendInterval)
+		if err != nil {
+			return fmt.Errorf("invalid json field http_server.email.send_interval, %v", err)
+		}
+
+		config.Server.HttpServer.JWT.ExpiresDuration, err = time.ParseDuration(config.Server.HttpServer.JWT.ExpiresTime)
+		if err != nil {
+			return fmt.Errorf("invalid json field http_server.email.jwt_expires_time, %v", err)
+		}
+
+		config.Server.HttpServer.JWT.RefreshDuration, err = time.ParseDuration(config.Server.HttpServer.JWT.RefreshTime)
+		if err != nil {
+			return fmt.Errorf("invalid json field http_server.email.jwt_refresh_time, %v", err)
+		}
+
+		if bytes, err := cachedContent(config.Server.HttpServer.Email.Template.EmailVerifyTemplateFile, EmailVerifyTemplateFileUrl); err != nil {
+			return fmt.Errorf("fail to load http_server.email.email_verify_template_file, %v", err)
+		} else if parse, err := template.New("email_verify").Parse(string(bytes)); err != nil {
+			return fmt.Errorf("fail to parse email_verify_template, %v", err)
+		} else {
+			config.Server.HttpServer.Email.Template.EmailVerifyTemplate = parse
+		}
+
+		if bytes, err := cachedContent(config.Server.HttpServer.Email.Template.ATCRatingChangeTemplateFile, ATCRatingChangeTemplateFileUrl); err != nil {
+			return fmt.Errorf("fail to load http_server.email.atc_rating_change_template_file, %v", err)
+		} else if parse, err := template.New("atc_rating_change").Parse(string(bytes)); err != nil {
+			return fmt.Errorf("fail to parse atc_rating_change_template, %v", err)
+		} else {
+			config.Server.HttpServer.Email.Template.ATCRatingChangeTemplate = parse
+		}
+
+		if bytes, err := cachedContent(config.Server.HttpServer.Email.Template.PermissionChangeTemplateFile, PermissionChangeTemplateFileUrl); err != nil {
+			return fmt.Errorf("fail to load http_server.email.permission_change_template_file, %v", err)
+		} else if parse, err := template.New("permission_change").Parse(string(bytes)); err != nil {
+			return fmt.Errorf("fail to parse permission_change_template, %v", err)
+		} else {
+			config.Server.HttpServer.Email.Template.PermissionChangeTemplate = parse
+		}
+
+		config.Server.HttpServer.Email.EmailServer = gomail.NewDialer(config.Server.HttpServer.Email.Host, config.Server.HttpServer.Email.Port, config.Server.HttpServer.Email.Username, config.Server.HttpServer.Email.Password)
 	}
 
-	config.Server.HttpServer.Address = fmt.Sprintf("%s:%d", config.Server.HttpServer.Host, config.Server.HttpServer.Port)
+	if config.Server.GRPCServer.Enabled {
+		config.Server.GRPCServer.Address = fmt.Sprintf("%s:%d", config.Server.GRPCServer.Host, config.Server.GRPCServer.Port)
 
-	config.Server.GRPCServer.CacheDuration, err = time.ParseDuration(config.Server.GRPCServer.CacheTime)
-	if err != nil {
-		return fmt.Errorf("invalid json field grpc_server.cache_time, %v", err)
-	}
-
-	config.Server.GRPCServer.Address = fmt.Sprintf("%s:%d", config.Server.GRPCServer.Host, config.Server.GRPCServer.Port)
-
-	config.Server.General.JWTExpiresDuration, err = time.ParseDuration(config.Server.General.JWTExpiresTime)
-	if err != nil {
-		return fmt.Errorf("invalid json field general.jwt_expires_time, %v", err)
-	}
-
-	config.Server.General.JWTRefreshDuration, err = time.ParseDuration(config.Server.General.JWTRefreshTime)
-	if err != nil {
-		return fmt.Errorf("invalid json field general.jwt_refresh_time, %v", err)
+		config.Server.GRPCServer.CacheDuration, err = time.ParseDuration(config.Server.GRPCServer.CacheTime)
+		if err != nil {
+			return fmt.Errorf("invalid json field grpc_server.cache_time, %v", err)
+		}
 	}
 
 	config.Database.ConnectIdleDuration, err = time.ParseDuration(config.Database.ConnectIdleTimeout)
