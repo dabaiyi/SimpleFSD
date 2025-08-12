@@ -429,6 +429,15 @@ func (c *ConnectionHandler) handleRequest(data []string, rawLine []byte) *Result
 	return resultSuccess()
 }
 
+func (c *ConnectionHandler) removeClient(data []string, rawLine []byte) *Result {
+	// #DA ZGGG_CTR SERVER
+	if data[0] != c.Client.Callsign {
+		return resultError(Syntax, false, "")
+	}
+	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
+	return resultSuccess()
+}
+
 func (c *ConnectionHandler) handleCommand(commandType ClientCommand, data []string, rawLine []byte) *Result {
 	var result *Result
 	switch commandType {
@@ -456,6 +465,8 @@ func (c *ConnectionHandler) handleCommand(commandType ClientCommand, data []stri
 		result = c.handleClientQuery(data, rawLine)
 	case ClientResponse:
 		result = c.handleClientResponse(data, rawLine)
+	case RemoveAtc, RemovePilot:
+		c.removeClient(data, rawLine)
 	default:
 		result = resultSuccess()
 	}
