@@ -5,6 +5,7 @@ on:
     branches:
       - "main"
     paths:
+      - .github/workflows/**
       - cmd/**
       - internal/**
       - go.mod
@@ -24,7 +25,7 @@ jobs:
           go-version: '1.23.4'
 
       - name: Build
-        run: go build -o fsd-server-linux-amd64-nightly -x ./cmd/fsd-server/
+        run: go build -o fsd-server-linux-amd64-nightly ./cmd/fsd-server/
 
       - name: Run UPX
         uses: crazy-max/ghaction-upx@v3
@@ -51,7 +52,7 @@ jobs:
           go-version: '1.23.4'
 
       - name: Build
-        run: go build -o fsd-server-windows-amd64-nightly.exe -x ./cmd/fsd-server/
+        run: go build -o fsd-server-windows-amd64-nightly.exe ./cmd/fsd-server/
 
       - name: Run UPX
         uses: crazy-max/ghaction-upx@v3

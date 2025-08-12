@@ -1,4 +1,4 @@
-// Package permission
+// Package database
 package database
 
 type Permission int64

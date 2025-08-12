@@ -44,6 +44,7 @@ type FlightPlan struct {
 	Route            string `gorm:"type:text"`
 	Locked           bool
 	FromWeb          bool
+	Version          int
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

@@ -216,7 +216,7 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, fi
 			}()
 
 			c.DebugF("[Broadcast] -> [%s] %s", cl.Callsign, message)
-			cl.SendLine(fullMsg)
+			cl.SendLineWithoutLog(fullMsg)
 		}(client)
 	}
 
