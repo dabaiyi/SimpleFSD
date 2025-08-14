@@ -17,23 +17,19 @@ const (
 	Ok ClientError = iota
 	CallsignInUse
 	CallsignInvalid
-	Registered
 	Syntax
 	SourceCallsignInvalid
 	AuthFail
 	NoCallsignFound
 	NoFlightPlan
-	NoWeatherFound
 	InvalidProtocolVision
 	RequestLevelTooHigh
-	ServerOverLoad
 	UserBaned
 )
 
-var clientErrorsString = []string{"No error", "Callsign in use", "Invalid callsign", "Already registerd",
+var clientErrorsString = []string{"No error", "Callsign in use", "Invalid callsign",
 	"Syntax error", "Invalid source callsign", "Invalid CID/password", "No such callsign", "No flightplan",
-	"No such weather profile", "Invalid protocol revision", "Requested level too high", "Too many clients connected",
-	"CID/PID was suspended"}
+	"Invalid protocol revision", "Requested level too high", "CID/PID was suspended"}
 
 func (e ClientError) String() string {
 	return clientErrorsString[e]
@@ -180,6 +176,28 @@ var PossibleClientCommands = [][]byte{[]byte(PilotPosition), []byte(AtcPosition)
 	[]byte(Message), []byte(ClientQuery), []byte(ClientResponse), []byte(Plan), []byte(AtcEditPlan), []byte(RequestHandoff),
 	[]byte(AcceptHandoff), []byte(ProController), []byte(AddAtc), []byte(RemoveAtc), []byte(AddPilot), []byte(RemovePilot),
 	[]byte(KillClient)}
+
+type CommandRequirement struct {
+	RequireLength int
+	Fatal         bool
+}
+
+var CommandRequirements = map[ClientCommand]*CommandRequirement{
+	AddAtc:         {12, true},
+	AddPilot:       {8, true},
+	AtcPosition:    {8, false},
+	PilotPosition:  {10, false},
+	AtcSubVisPoint: {4, false},
+	ClientQuery:    {3, false},
+	ClientResponse: {3, false},
+	Message:        {3, false},
+	Plan:           {17, false},
+	AtcEditPlan:    {18, false},
+	KillClient:     {2, false},
+	RequestHandoff: {3, false},
+	AcceptHandoff:  {3, false},
+	ProController:  {3, false},
+}
 
 func (c ClientCommand) String() string {
 	return string(c)

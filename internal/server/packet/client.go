@@ -6,7 +6,6 @@ import (
 	"fmt"
 	logger "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
-	"net"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -30,7 +29,7 @@ type Client struct {
 	User           *database.User
 	Protocol       int
 	RealName       string
-	Socket         net.Conn
+	Socket         *ConnectionHandler
 	Position       [4]Position
 	SimType        int
 	Transponder    int
@@ -47,13 +46,14 @@ type Client struct {
 	lock           sync.RWMutex
 }
 
-func NewClient(callsign string, rating Rating, user *database.User, protocol int, realName string, socket net.Conn, isAtc bool) *Client {
+func NewClient(callsign string, rating Rating, protocol int, realName string, socket *ConnectionHandler, isAtc bool) *Client {
+	socket.Callsign = callsign
 	var flightPlan *database.FlightPlan = nil
 	if !isAtc && !config.Server.General.SimulatorServer {
 		var err error
-		flightPlan, err = database.GetFlightPlan(user.Cid)
+		flightPlan, err = database.GetFlightPlan(socket.User.Cid)
 		if err != nil {
-			logger.WarnF("Fail to get flight plan for %s(%d): %v", callsign, user.Cid, err)
+			logger.WarnF("Fail to get flight plan for %s(%d): %v", callsign, socket.User.Cid, err)
 		}
 	}
 	return &Client{
@@ -61,7 +61,7 @@ func NewClient(callsign string, rating Rating, user *database.User, protocol int
 		Callsign:       callsign,
 		Rating:         rating,
 		Facility:       0,
-		User:           user,
+		User:           socket.User,
 		Protocol:       protocol,
 		RealName:       realName,
 		Socket:         socket,
@@ -74,7 +74,7 @@ func NewClient(callsign string, rating Rating, user *database.User, protocol int
 		VisualRange:    40,
 		FlightPlan:     flightPlan,
 		AtisInfo:       make([]string, 0, 4),
-		History:        database.NewHistory(user.Cid, callsign, isAtc),
+		History:        database.NewHistory(socket.User.Cid, callsign, isAtc),
 		motdBytes:      nil,
 		disconnect:     atomic.Bool{},
 		reconnectTimer: nil,
@@ -90,7 +90,7 @@ func (c *Client) Delete() {
 	if c.disconnect.Load() {
 		c.lock.Lock()
 		defer c.lock.Unlock()
-		logger.InfoF("[%s] Client session deleted", c.Callsign)
+		logger.InfoF("[%s](%s) Client session deleted", c.Socket.ConnId, c.Callsign)
 
 		if c.reconnectTimer != nil {
 			c.reconnectTimer.Stop()
@@ -99,28 +99,28 @@ func (c *Client) Delete() {
 
 		if c.IsAtc || !config.Server.General.SimulatorServer {
 			if err := c.History.End(); err != nil {
-				logger.WarnF("[%s] Failed to end history: %v", c.Callsign, err)
+				logger.ErrorF("[%s](%s) Failed to end history: %v", c.Socket.ConnId, c.Callsign, err)
 			}
 		}
 
 		if c.IsAtc {
 			if err := c.User.AddAtcTime(c.History.OnlineTime); err != nil {
-				logger.WarnF("[%s] Failed to add ATC time: %v", c.Callsign, err)
+				logger.ErrorF("[%s](%s) Failed to add ATC time: %v", c.Socket.ConnId, c.Callsign, err)
 			}
 		} else if !config.Server.General.SimulatorServer {
 			// 如果不是模拟机服务器, 则写入机组连线时长
 			if err := c.User.AddPilotTime(c.History.OnlineTime); err != nil {
-				logger.WarnF("[%s] Failed to add pilot time: %v", c.Callsign, err)
+				logger.ErrorF("[%s](%s) Failed to add pilot time: %v", c.Socket.ConnId, c.Callsign, err)
 			}
 		}
 
 		if !clientManager.DeleteClient(c.Callsign) {
-			logger.WarnF("[%s] Failed to delete from client manager", c.Callsign)
+			logger.ErrorF("[%s](%s) Failed to delete from client manager", c.Socket.ConnId, c.Callsign)
 		}
 	}
 }
 
-func (c *Client) Reconnect(socket net.Conn) bool {
+func (c *Client) Reconnect(socket *ConnectionHandler) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -128,7 +128,7 @@ func (c *Client) Reconnect(socket net.Conn) bool {
 		return false
 	}
 
-	logger.InfoF("[%s] Client reconnected", c.Callsign)
+	logger.InfoF("[%s](%s) Client reconnected", c.Socket.ConnId, c.Callsign)
 
 	if c.reconnectTimer != nil {
 		c.reconnectTimer.Stop()
@@ -138,6 +138,7 @@ func (c *Client) Reconnect(socket net.Conn) bool {
 	c.ClearAtcAtisInfo()
 	c.disconnect.Store(false)
 	c.Socket = socket
+	socket.Callsign = c.Callsign
 	return true
 }
 
@@ -155,9 +156,8 @@ func (c *Client) MarkedDisconnect(immediate bool) {
 	}
 
 	// 关闭连接
-	if c.Socket != nil {
-		_ = c.Socket.Close()
-		c.Socket = nil
+	if c.Socket.Conn != nil {
+		_ = c.Socket.Conn.Close()
 	}
 
 	// 取消之前的定时器
@@ -170,7 +170,7 @@ func (c *Client) MarkedDisconnect(immediate bool) {
 	}
 
 	c.reconnectTimer = time.AfterFunc(config.Server.FSDServer.SessionCleanDuration, c.Delete)
-	logger.InfoF("[%s] Client disconnected, reconnect window: %v",
+	logger.InfoF("[%s](%s) Client disconnected, reconnect window: %v", c.Socket.ConnId,
 		c.Callsign, config.Server.FSDServer.SessionCleanDuration)
 }
 
@@ -245,13 +245,13 @@ func (c *Client) SendError(result *Result) {
 	c.SendLine(packet)
 
 	if result.fatal {
-		c.lock.Lock()
-		defer c.lock.Unlock()
-		if c.Socket != nil {
-			_ = c.Socket.Close()
-			c.Socket = nil
-		}
+		c.Socket.Disconnected.Store(true)
 		c.disconnect.Store(true)
+		time.AfterFunc(500*time.Millisecond, func() {
+			if !clientManager.DeleteClient(c.Callsign) {
+				logger.ErrorF("[%s](%s) Failed to delete from client manager", c.Socket.ConnId, c.Callsign)
+			}
+		})
 	}
 }
 
@@ -259,8 +259,8 @@ func (c *Client) SendLineWithoutLog(line []byte) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	if c.disconnect.Load() || c.Socket == nil {
-		logger.DebugF("[%s] Attempted send to disconnected client", c.Callsign)
+	if c.disconnect.Load() {
+		logger.WarnF("[%s](%s) Attempted send to disconnected client", c.Socket.ConnId, c.Callsign)
 		return
 	}
 
@@ -268,8 +268,8 @@ func (c *Client) SendLineWithoutLog(line []byte) {
 		line = append(line, splitSign...)
 	}
 
-	if _, err := c.Socket.Write(line); err != nil {
-		logger.WarnF("[%s] Failed to send data: %v", c.Callsign, err)
+	if _, err := c.Socket.Conn.Write(line); err != nil {
+		logger.ErrorF("[%s](%s) Failed to send data: %v", c.Socket.ConnId, c.Callsign, err)
 	}
 }
 
@@ -277,20 +277,20 @@ func (c *Client) SendLine(line []byte) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	if c.disconnect.Load() || c.Socket == nil {
-		logger.DebugF("[%s] Attempted send to disconnected client", c.Callsign)
+	if c.disconnect.Load() {
+		logger.DebugF("[%s](%s) Attempted send to disconnected client", c.Socket.ConnId, c.Callsign)
 		return
 	}
 
 	if !bytes.HasSuffix(line, splitSign) {
-		logger.DebugF("[%s] <- %s", c.Callsign, line)
+		logger.DebugF("[%s](%s) <- %s", c.Socket.ConnId, c.Callsign, line)
 		line = append(line, splitSign...)
 	} else {
-		logger.DebugF("[%s] <- %s", c.Callsign, line[:len(line)-splitSignLen])
+		logger.DebugF("[%s](%s) <- %s", c.Socket.ConnId, c.Callsign, line[:len(line)-splitSignLen])
 	}
 
-	if _, err := c.Socket.Write(line); err != nil {
-		logger.WarnF("[%s] Failed to send data: %v", c.Callsign, err)
+	if _, err := c.Socket.Conn.Write(line); err != nil {
+		logger.WarnF("[%s](%s) Failed to send data: %v", c.Socket.ConnId, c.Callsign, err)
 	}
 }
 

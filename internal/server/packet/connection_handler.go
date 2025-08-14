@@ -6,6 +6,7 @@ import (
 	logger "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
 	"net"
+	"sync/atomic"
 	"time"
 )
 
@@ -15,10 +16,12 @@ var (
 )
 
 type ConnectionHandler struct {
-	Conn   net.Conn
-	ConnId string
-	Client *Client
-	User   *database.User
+	Conn         net.Conn
+	ConnId       string
+	Callsign     string
+	Client       *Client
+	User         *database.User
+	Disconnected atomic.Bool
 }
 
 func (c *ConnectionHandler) SendError(result *Result) {
@@ -29,15 +32,11 @@ func (c *ConnectionHandler) SendError(result *Result) {
 		c.Client.SendError(result)
 		return
 	}
-	var packet []byte
-	if c.Client != nil {
-		packet = makePacket(Error, "server", c.Client.Callsign, fmt.Sprintf("%03d", result.errno.Index()), result.env, result.errno.String())
-	} else {
-		packet = makePacket(Error, "server", "unknown", fmt.Sprintf("%03d", result.errno.Index()), result.env, result.errno.String())
-	}
-	logger.DebugF("[%s] <- %s", c.ConnId, packet[:len(packet)-splitSignLen])
+	packet := makePacket(Error, "server", c.Callsign, fmt.Sprintf("%03d", result.errno.Index()), result.env, result.errno.String())
+	logger.DebugF("[%s](%s) <- %s", c.ConnId, c.Callsign, packet[:len(packet)-splitSignLen])
 	_, _ = c.Conn.Write(packet)
 	if result.fatal {
+		c.Disconnected.Store(true)
 		time.AfterFunc(500*time.Millisecond, func() {
 			_ = c.Conn.Close()
 		})
@@ -45,33 +44,45 @@ func (c *ConnectionHandler) SendError(result *Result) {
 }
 
 func (c *ConnectionHandler) handleLine(line []byte) {
+	if c.Disconnected.Load() {
+		return
+	}
 	command, data := parserCommandLine(line)
 	result := c.handleCommand(command, data, line)
+	if result == nil {
+		logger.WarnF("[%s](%s) handleCommand return a nil result", c.ConnId, c.Callsign)
+		return
+	}
 	if !result.success {
+		logger.ErrorF("[%s](%s) handleCommand fail, %s, %s", c.ConnId, c.Callsign, result.errno.String(), result.err.Error())
 		c.SendError(result)
 	}
 }
 
 func (c *ConnectionHandler) HandleConnection() {
 	defer func() {
-		logger.DebugF("[%s] x Connection closed", c.ConnId)
+		logger.DebugF("[%s](%s) x Connection closed", c.ConnId, c.Callsign)
 		if err := c.Conn.Close(); err != nil && !isNetClosedError(err) {
-			logger.WarnF("[%s] Error occurred while closing connection, details: %v", c.ConnId, err)
+			logger.WarnF("[%s](%s) Error occurred while closing connection, details: %v", c.ConnId, c.Callsign, err)
 		}
 	}()
 	scanner := bufio.NewScanner(c.Conn)
 	scanner.Split(createSplitFunc(splitSign))
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if c.Client != nil {
-			logger.DebugF("[%s](%s) -> %s", c.Client.Callsign, c.ConnId, line)
-		} else {
-			logger.DebugF("[%s] -> %s", c.ConnId, line)
-		}
+		logger.DebugF("[%s](%s) -> %s", c.ConnId, c.Callsign, line)
 		c.handleLine(line)
+		if c.Disconnected.Load() {
+			break
+		}
 	}
 
 	if c.Client != nil {
+		if c.Client.IsAtc {
+			clientManager.BroadcastMessage(makePacket(RemoveAtc, c.Client.Callsign, "SERVER"), c.Client, BroadcastToClientInRange)
+		} else {
+			clientManager.BroadcastMessage(makePacket(RemovePilot, c.Client.Callsign, "SERVER"), c.Client, BroadcastToClientInRange)
+		}
 		c.Client.MarkedDisconnect(false)
 	}
 }

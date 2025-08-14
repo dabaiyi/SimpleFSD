@@ -230,10 +230,11 @@ func StartFSDServer() {
 		sem <- struct{}{}
 		go func(c net.Conn) {
 			connection := &packet.ConnectionHandler{
-				Conn:   conn,
-				ConnId: conn.RemoteAddr().String(),
-				Client: nil,
-				User:   nil,
+				Conn:     conn,
+				ConnId:   conn.RemoteAddr().String(),
+				Callsign: "unknown",
+				Client:   nil,
+				User:     nil,
 			}
 			connection.HandleConnection()
 			// 释放信号量

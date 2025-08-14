@@ -7,7 +7,6 @@ import (
 	"github.com/half-nothing/fsd-server/internal/server/database"
 	"github.com/half-nothing/fsd-server/internal/utils"
 	"strings"
-	"time"
 )
 
 // getUserId 转换客户端传递过来的cid为数据库可识别的模式
@@ -19,38 +18,46 @@ func getUserId(cid string) database.UserId {
 	return database.StringUserId(cid)
 }
 
+func (c *ConnectionHandler) checkPacketLength(data []string, requirement *CommandRequirement) (*Result, bool) {
+	length := len(data)
+	if length < requirement.RequireLength {
+		return resultError(Syntax, requirement.Fatal, c.Callsign, fmt.Errorf("datapack length too short, require %d but got %d", requirement.RequireLength, length)), false
+	}
+	return nil, true
+}
+
 // verifyUserInfo 验证用户信息与处理客户端重连机制
 func (c *ConnectionHandler) verifyUserInfo(callsign string, protocol int, cid database.UserId, password string) *Result {
 	if !callsignValid(callsign) {
-		return resultError(CallsignInvalid, true, callsign)
+		return resultError(CallsignInvalid, true, callsign, nil)
 	}
 
 	if protocol != 9 {
-		return resultError(InvalidProtocolVision, true, callsign)
+		return resultError(InvalidProtocolVision, true, callsign, nil)
 	}
 
-	client, _ := clientManager.GetClient(callsign)
+	client, ok := clientManager.GetClient(callsign)
 
 	// 客户端存在且标记为断开连接
-	if client != nil {
-		if client.Reconnect(c.Conn) {
+	if ok {
+		if client.Reconnect(c) {
 			// 客户端重连
 			c.Client = client
 		} else {
 			// 呼号已被使用
-			return resultError(CallsignInUse, true, callsign)
+			return resultError(CallsignInUse, true, callsign, nil)
 		}
 	}
 
 	user, err := cid.GetUser()
 	if err != nil {
-		return resultError(AuthFail, true, callsign)
+		return resultError(AuthFail, true, callsign, err)
 	}
 	if user.Rating == Ban.Index() {
-		return resultError(UserBaned, true, callsign)
+		return resultError(UserBaned, true, callsign, nil)
 	}
 	if !user.VerifyPassword(password) {
-		return resultError(AuthFail, true, callsign)
+		return resultError(AuthFail, true, callsign, nil)
 	}
 
 	// 重设重连客户端的User
@@ -66,9 +73,6 @@ func (c *ConnectionHandler) verifyUserInfo(callsign string, protocol int, cid da
 func (c *ConnectionHandler) handleAddAtc(data []string, rawLine []byte) *Result {
 	// #AA 2352_OBS SERVER 2352 2352 123456  1  9  1  0  29.86379 119.49287 100
 	// [0] [   1  ] [  2 ] [ 3] [ 4] [  5 ] [6][7][8][9] [  10  ] [   11  ] [12]
-	if len(data) < 12 {
-		return resultError(Syntax, true, "")
-	}
 	callsign := data[0]
 	cid := getUserId(data[3])
 	password := data[4]
@@ -79,18 +83,18 @@ func (c *ConnectionHandler) handleAddAtc(data []string, rawLine []byte) *Result 
 	}
 	reqRating := utils.StrToInt(data[5], 0)
 	if reqRating > c.User.Rating {
-		return resultError(RequestLevelTooHigh, true, callsign)
+		return resultError(RequestLevelTooHigh, true, callsign, nil)
 	}
 	realName := data[2]
 	latitude := utils.StrToFloat(data[9], 0)
 	longitude := utils.StrToFloat(data[10], 0)
 	if c.Client == nil {
-		c.Client = NewClient(callsign, Rating(reqRating), c.User, protocol, realName, c.Conn, true)
+		c.Client = NewClient(callsign, Rating(reqRating), protocol, realName, c, true)
 		_ = c.Client.SetPosition(0, latitude, longitude)
 		_ = clientManager.AddClient(c.Client)
 	}
 	c.Client.SendLine(makePacket(ClientQuery, "SERVER", callsign, "ATIS"))
-	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
+	go clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	c.Client.SendMotd()
 	logger.InfoF("[%s] ATC login successfully", callsign)
 	return resultSuccess()
@@ -100,9 +104,6 @@ func (c *ConnectionHandler) handleAddAtc(data []string, rawLine []byte) *Result 
 func (c *ConnectionHandler) handleAddPilot(data []string, rawLine []byte) *Result {
 	//	#AP CES2352 SERVER 2352 123456  1   9  16  Half_nothing ZGHA
 	//  [0] [  1  ] [  2 ] [ 3] [  4 ] [5] [6] [7] [       8       ]
-	if len(data) < 8 {
-		return resultError(Syntax, true, "")
-	}
 	callsign := data[0]
 	cid := getUserId(data[2])
 	password := data[3]
@@ -113,16 +114,16 @@ func (c *ConnectionHandler) handleAddPilot(data []string, rawLine []byte) *Resul
 	}
 	reqRating := Rating(utils.StrToInt(data[4], 0) - 1)
 	if reqRating != Normal || !ratingFacilityMap[reqRating].CheckFacility(Pilot) {
-		return resultError(RequestLevelTooHigh, true, callsign)
+		return resultError(RequestLevelTooHigh, true, callsign, nil)
 	}
 	simType := utils.StrToInt(data[6], 0)
 	realName := data[7]
 	if c.Client == nil {
-		c.Client = NewClient(callsign, reqRating, c.User, protocol, realName, c.Conn, false)
+		c.Client = NewClient(callsign, reqRating, protocol, realName, c, false)
 		c.Client.SimType = simType
 		_ = clientManager.AddClient(c.Client)
 	}
-	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
+	go clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	c.Client.SendMotd()
 	logger.InfoF("[%s] Client login successfully", callsign)
 	if !config.Server.General.SimulatorServer && c.Client.FlightPlan != nil &&
@@ -139,24 +140,21 @@ func (c *ConnectionHandler) handleAddPilot(data []string, rawLine []byte) *Resul
 func (c *ConnectionHandler) handleAtcPosUpdate(data []string, rawLine []byte) *Result {
 	//  %  ZSHA_CTR 24550  6  600  5  27.28025 118.28701  0
 	// [0] [   1  ] [ 2 ] [3] [4] [5] [   6  ] [   7   ] [8]
-	if len(data) < 8 {
-		return resultError(Syntax, false, "")
-	}
 	callsign := data[0]
 	facility := Facility(1 << utils.StrToInt(data[2], 0))
 	rating := Rating(utils.StrToInt(data[4], 0))
 	if !rating.CheckRatingFacility(facility) {
-		return resultError(RequestLevelTooHigh, true, callsign)
+		return resultError(RequestLevelTooHigh, true, callsign, nil)
 	}
 	frequency := utils.StrToInt(data[1], 0)
 	visualRange := utils.StrToFloat(data[3], 0)
 	latitude := utils.StrToFloat(data[5], 0)
 	longitude := utils.StrToFloat(data[6], 0)
 	if c.Client == nil {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, "", fmt.Errorf("client not register"))
 	}
+	go clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	c.Client.UpdateAtcPos(frequency, facility, visualRange, latitude, longitude)
-	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	return resultSuccess()
 }
 
@@ -164,19 +162,16 @@ func (c *ConnectionHandler) handleAtcPosUpdate(data []string, rawLine []byte) *R
 func (c *ConnectionHandler) handlePilotPosUpdate(data []string, rawLine []byte) *Result {
 	//	@   S  CPA421 7000  1  38.96244 121.53479 87   0  4290770974 278
 	// [0] [1] [  2 ] [ 3] [4] [   5  ] [   6   ] [7] [8] [    9   ] [10]
-	if len(data) < 10 {
-		return resultError(Syntax, false, "")
-	}
 	transponder := utils.StrToInt(data[2], 0)
 	latitude := utils.StrToFloat(data[4], 0)
 	longitude := utils.StrToFloat(data[5], 0)
 	altitude := utils.StrToInt(data[6], 0)
 	groundSpeed := utils.StrToInt(data[7], 0)
 	if c.Client == nil {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, "", fmt.Errorf("client not register"))
 	}
+	go clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	c.Client.UpdatePilotPos(transponder, latitude, longitude, altitude, groundSpeed)
-	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	return resultSuccess()
 }
 
@@ -184,36 +179,33 @@ func (c *ConnectionHandler) handlePilotPosUpdate(data []string, rawLine []byte) 
 func (c *ConnectionHandler) handleAtcVisPointUpdate(data []string, _ []byte) *Result {
 	//  '  ZSHA_CTR  0  36.67349 120.45621
 	// [0] [   1  ] [2] [   3  ] [   4   ]
-	if len(data) < 4 {
-		return resultError(Syntax, false, "")
-	}
 	visPos := utils.StrToInt(data[1], 0)
 	latitude := utils.StrToFloat(data[2], 0)
 	longitude := utils.StrToFloat(data[3], 0)
 	if c.Client == nil {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, "", fmt.Errorf("client not register"))
 	}
 	_ = c.Client.UpdateAtcVisPoint(visPos, latitude, longitude)
 	return resultSuccess()
 }
 
 // sendFrequencyMessage 发送频率消息
-func (c *ConnectionHandler) sendFrequencyMessage(targetStation string, rawLine []byte) (result *Result) {
+func (c *ConnectionHandler) sendFrequencyMessage(targetStation string, rawLine []byte) *Result {
 	if c.Client == nil {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, "", fmt.Errorf("client not register"))
 	}
 	frequency := utils.StrToInt(targetStation[1:], -1)
 	if frequency == -1 {
-		result = resultError(Syntax, false, c.Client.Callsign)
+		return resultError(Syntax, false, c.Client.Callsign, fmt.Errorf("illegal frequency %s", targetStation))
 	}
 	if frequencyValid(frequency) {
 		// 合法频率, 发给所有客户端
-		clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
+		go clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
 	} else {
 		// 非法频率, 大概率是管制使用, 只发给管制
-		clientManager.BroadcastMessage(rawLine, c.Client, CombineBroadcastFilter(BroadcastToAtc, BroadcastToClientInRange))
+		go clientManager.BroadcastMessage(rawLine, c.Client, CombineBroadcastFilter(BroadcastToAtc, BroadcastToClientInRange))
 	}
-	return
+	return nil
 }
 
 // handleClientQuery 处理客户端查询消息
@@ -226,12 +218,9 @@ func (c *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *Re
 	//	$CQ ZYSH_CTR @94835 FA  CPA421 31100
 	//	[0] [  1   ] [  2 ] [3] [  4 ] [ 5 ]
 	if c.Client == nil {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, "", fmt.Errorf("client not register"))
 	}
 	commandLength := len(data)
-	if commandLength < 3 {
-		return resultError(Syntax, false, c.Client.Callsign)
-	}
 	targetStation := data[1]
 	if targetStation == "SERVER" {
 		subQuery := data[2]
@@ -240,7 +229,7 @@ func (c *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *Re
 			targetCallsign := data[3]
 			client, ok := clientManager.GetClient(targetCallsign)
 			if !ok || client.FlightPlan == nil {
-				return resultError(NoFlightPlan, false, c.Client.Callsign)
+				return resultError(NoFlightPlan, false, c.Client.Callsign, nil)
 			}
 			c.Client.SendLine([]byte(client.FlightPlan.ToString(data[0])))
 		}
@@ -285,12 +274,9 @@ func (c *ConnectionHandler) handleClientResponse(data []string, rawLine []byte) 
 	//	$CR ZSHA_CTR SERVER ATIS  T  ZSHA_CTR Shanghai Control
 	//	[0] [   1  ] [  2 ] [ 3] [4] [           5           ]
 	if c.Client == nil {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, "", fmt.Errorf("client not register"))
 	}
 	commandLength := len(data)
-	if commandLength < 3 {
-		return resultError(Syntax, false, "")
-	}
 	targetStation := data[1]
 	if targetStation == "SERVER" {
 		subQuery := data[2]
@@ -312,10 +298,6 @@ func (c *ConnectionHandler) handleClientResponse(data []string, rawLine []byte) 
 func (c *ConnectionHandler) handleMessage(data []string, rawLine []byte) *Result {
 	// #TM ZSHA_CTR ZSSS_APP 111
 	// [0] [   1  ] [   2  ] [3]
-	commandLength := len(data)
-	if commandLength < 3 {
-		return resultError(Syntax, false, "")
-	}
 	targetStation := data[1]
 	if strings.HasPrefix(targetStation, "@") {
 		result := c.sendFrequencyMessage(targetStation, rawLine)
@@ -339,20 +321,16 @@ func (c *ConnectionHandler) handlePlan(data []string, rawLine []byte) *Result {
 	// /V/ SEL/AHFL VENOS A588 NULRA W206 MAGBI W656 ISLUK W629 LARUN
 	// [    16    ] [                      17                       ]
 	if c.Client == nil {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, "", fmt.Errorf("client not register"))
 	}
 	if c.Client.IsAtc {
-		return resultError(Syntax, false, c.Client.Callsign)
-	}
-	commandLength := len(data)
-	if commandLength < 17 {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, c.Client.Callsign, fmt.Errorf("atc can not submit fligth plan"))
 	}
 	if err := c.Client.UpdateFlightPlan(data); err != nil {
-		return resultError(Syntax, false, c.Client.Callsign)
+		return resultError(Syntax, false, c.Client.Callsign, err)
 	}
 	if !c.Client.FlightPlan.Locked {
-		clientManager.BroadcastMessage(rawLine, c.Client, CombineBroadcastFilter(BroadcastToAtc, BroadcastToClientInRange))
+		go clientManager.BroadcastMessage(rawLine, c.Client, CombineBroadcastFilter(BroadcastToAtc, BroadcastToClientInRange))
 	}
 	return resultSuccess()
 }
@@ -363,31 +341,27 @@ func (c *ConnectionHandler) handleAtcEditPlan(data []string, _ []byte) *Result {
 	// /V/ SEL/AHFL CHI19D/28 VENOS A588 NULRA W206 MAGBI W656 ISLUK W629 LARUN
 	// [     17   ] [                             18                          ]
 	if c.Client == nil {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, "", fmt.Errorf("client not register"))
 	}
 	if !c.Client.IsAtc {
-		return resultError(Syntax, false, c.Client.Callsign)
+		return resultError(Syntax, false, c.Client.Callsign, fmt.Errorf("only act can edit flight plan"))
 	}
 	if !c.Client.CheckFacility(allowAtcFacility) {
-		return resultError(Syntax, false, c.Client.Callsign)
-	}
-	commandLength := len(data)
-	if commandLength < 18 {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, c.Client.Callsign, fmt.Errorf("%s facility not allowed to edit plan", c.Client.Facility.String()))
 	}
 	targetCallsign := data[2]
 	client, ok := clientManager.GetClient(targetCallsign)
 	if !ok {
-		return resultError(Syntax, false, c.Client.Callsign)
+		return resultError(SourceCallsignInvalid, false, c.Client.Callsign, fmt.Errorf("%s not exists", targetCallsign))
 	}
 	if client.FlightPlan == nil {
-		return resultError(NoFlightPlan, false, c.Client.Callsign)
+		return resultError(NoFlightPlan, false, c.Client.Callsign, fmt.Errorf("%s do not have filght plan", c.Client.Callsign))
 	}
 	client.FlightPlan.Locked = !config.Server.General.SimulatorServer
 	if err := client.FlightPlan.UpdateFlightPlan(data[1:], true); err != nil {
-		return resultError(Syntax, false, c.Client.Callsign)
+		return resultError(Syntax, false, c.Client.Callsign, err)
 	}
-	clientManager.BroadcastMessage([]byte(client.FlightPlan.ToString(string(AllATC))),
+	go clientManager.BroadcastMessage([]byte(client.FlightPlan.ToString(string(AllATC))),
 		c.Client, CombineBroadcastFilter(BroadcastToAtc, BroadcastToClientInRange))
 	return resultSuccess()
 }
@@ -395,23 +369,17 @@ func (c *ConnectionHandler) handleAtcEditPlan(data []string, _ []byte) *Result {
 func (c *ConnectionHandler) handleKillClient(data []string, _ []byte) *Result {
 	// $!! ZSHA_CTR CPA421 test
 	if c.Client == nil {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, "", fmt.Errorf("client not register"))
 	}
 	if !(c.Client.IsAtc && c.Client.CheckRating(allowKillRating)) {
-		return resultError(Syntax, false, c.Client.Callsign)
-	}
-	commandLength := len(data)
-	if commandLength < 2 {
-		return resultError(Syntax, false, "")
+		return resultError(Syntax, false, c.Client.Callsign, fmt.Errorf("%s facility not allowed to kill client", c.Client.Facility.String()))
 	}
 	targetStation := data[1]
 	client, ok := clientManager.GetClient(targetStation)
 	if !ok {
-		return resultError(Syntax, false, c.Client.Callsign)
+		return resultError(SourceCallsignInvalid, false, c.Client.Callsign, fmt.Errorf("%s not exists", targetStation))
 	}
-	time.AfterFunc(time.Second, func() {
-		client.MarkedDisconnect(false)
-	})
+	client.MarkedDisconnect(false)
 	return resultSuccess()
 }
 
@@ -420,26 +388,24 @@ func (c *ConnectionHandler) handleRequest(data []string, rawLine []byte) *Result
 	// [0] [  1   ] [   2  ] [  3  ]
 	// #PC ZSHA_CTR ZSSS_APP CCP HC CES2352
 	// $HA ZSHA_CTR ZSSS_APP CES2352
-	commandLength := len(data)
-	if commandLength < 3 {
-		return resultError(Syntax, false, "")
-	}
 	targetStation := data[1]
 	_ = clientManager.SendMessageTo(targetStation, rawLine)
 	return resultSuccess()
 }
 
-func (c *ConnectionHandler) removeClient(data []string, rawLine []byte) *Result {
+func (c *ConnectionHandler) removeClient(_ []string, _ []byte) *Result {
 	// #DA ZGGG_CTR SERVER
-	if data[0] != c.Client.Callsign {
-		return resultError(Syntax, false, "")
-	}
-	clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToClientInRange)
+	logger.InfoF("[%s] Offline", c.Client.Callsign)
 	return resultSuccess()
 }
 
 func (c *ConnectionHandler) handleCommand(commandType ClientCommand, data []string, rawLine []byte) *Result {
-	var result *Result
+	var result = resultSuccess()
+	if requirement, ok := CommandRequirements[commandType]; ok {
+		if err, ok := c.checkPacketLength(data, requirement); !ok {
+			return err
+		}
+	}
 	switch commandType {
 	case AddAtc:
 		result = c.handleAddAtc(data, rawLine)
