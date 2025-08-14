@@ -206,7 +206,7 @@ func newConfig() *Config {
 				MaxWorkers:        128,
 				CacheTime:         "15s",
 				ProxyType:         0,
-				RateLimit:         100,
+				RateLimit:         15,
 				RateLimitWindow:   "1m",
 				UsernameLengthMin: 4,
 				UsernameLengthMax: 16,

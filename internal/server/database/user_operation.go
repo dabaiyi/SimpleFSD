@@ -82,6 +82,19 @@ func NewUser(username string, email string, cid int, password string) (*User, er
 	}, nil
 }
 
+func GetUsers(page, pageSize int) ([]*User, int64, error) {
+	var total int64
+	users := make([]*User, 0, pageSize)
+
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+
+	database.WithContext(ctx).Model(&User{}).Select("id").Count(&total)
+	err := database.WithContext(ctx).Offset((page - 1) * pageSize).Limit(pageSize).Find(&users).Error
+
+	return users, total, err
+}
+
 func (user *User) UpdateInfo(info map[string]interface{}) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()

@@ -69,7 +69,7 @@ func (UnimplementedServerStatusServer) mustEmbedUnimplementedServerStatusServer(
 func (UnimplementedServerStatusServer) testEmbeddedByValue()                      {}
 
 // UnsafeServerStatusServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to ServerStatusServer will
+// Use of this interfaces is not recommended, as added methods to ServerStatusServer will
 // result in compilation errors.
 type UnsafeServerStatusServer interface {
 	mustEmbedUnimplementedServerStatusServer()

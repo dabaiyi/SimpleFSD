@@ -1,7 +1,10 @@
 // Package service
 package service
 
-import c "github.com/half-nothing/fsd-server/internal/config"
+import (
+	c "github.com/half-nothing/fsd-server/internal/config"
+	. "github.com/half-nothing/fsd-server/internal/server/service/interfaces"
+)
 
 type FieldValidator struct {
 	Min, Max          int
@@ -41,26 +44,25 @@ func InitValidator() {
 	usernameValidator = &FieldValidator{
 		Min:      config.Server.HttpServer.UsernameLengthMin,
 		Max:      config.Server.HttpServer.UsernameLengthMax,
-		ErrShort: &ApiStatus{"USERNAME_TOO_SHORT", "用户名过短", BadRequest},
-		ErrLong:  &ApiStatus{"USERNAME_TOO_LONG", "用户名过长", BadRequest},
+		ErrShort: &ApiStatus{StatusName: "USERNAME_TOO_SHORT", Description: "用户名过短", HttpCode: BadRequest},
+		ErrLong:  &ApiStatus{StatusName: "USERNAME_TOO_LONG", Description: "用户名过长", HttpCode: BadRequest},
 	}
 	passwordValidator = &FieldValidator{
 		Min:      config.Server.HttpServer.PasswordLengthMin,
 		Max:      config.Server.HttpServer.PasswordLengthMax,
-		ErrShort: &ApiStatus{"PASSWORD_TOO_SHORT", "密码长度过短", BadRequest},
-		ErrLong:  &ApiStatus{"PASSWORD_TOO_LONG", "密码长度过长", BadRequest},
+		ErrShort: &ApiStatus{StatusName: "PASSWORD_TOO_SHORT", Description: "密码长度过短", HttpCode: BadRequest},
+		ErrLong:  &ApiStatus{StatusName: "PASSWORD_TOO_LONG", Description: "密码长度过长", HttpCode: BadRequest},
 	}
 	emailValidator = &FieldValidator{
 		Min:      config.Server.HttpServer.EmailLengthMin,
 		Max:      config.Server.HttpServer.EmailLengthMax,
-		ErrShort: &ApiStatus{"EMAIL_TOO_SHORT", "邮箱过短", BadRequest},
-		ErrLong:  &ApiStatus{"EMAIL_TOO_LONG", "邮箱过长", BadRequest},
+		ErrShort: &ApiStatus{StatusName: "EMAIL_TOO_SHORT", Description: "邮箱过短", HttpCode: BadRequest},
+		ErrLong:  &ApiStatus{StatusName: "EMAIL_TOO_LONG", Description: "邮箱过长", HttpCode: BadRequest},
 	}
 	cidValidator = &FieldValidator{
 		Min:      config.Server.HttpServer.CidMin,
 		Max:      config.Server.HttpServer.CidMax,
-		ErrShort: &ApiStatus{"CID_TOO_SHORT", "cid过短", BadRequest},
-		ErrLong:  &ApiStatus{"CID_TOO_LONG", "cid过长", BadRequest},
+		ErrShort: &ApiStatus{StatusName: "CID_TOO_SHORT", Description: "cid过短", HttpCode: BadRequest},
+		ErrLong:  &ApiStatus{StatusName: "CID_TOO_LONG", Description: "cid过长", HttpCode: BadRequest},
 	}
-
 }

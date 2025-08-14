@@ -4,52 +4,112 @@ package controller
 import (
 	"github.com/golang-jwt/jwt/v5"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	"github.com/half-nothing/fsd-server/internal/server/service"
+	. "github.com/half-nothing/fsd-server/internal/server/service/interfaces"
 	"github.com/labstack/echo/v4"
 )
 
-func UserRegister(ctx echo.Context) error {
-	data := service.RequestRegisterUser{}
-	if err := ctx.Bind(&data); err != nil {
-		c.ErrorF("error binding data: %v", err)
-		return service.NewErrorResponse(ctx, &service.ErrLackParam)
-	}
-	return data.RegisterUser().Response(ctx)
+type UserHandlerInterface interface {
+	UserRegisterHandler(ctx echo.Context) error
+	UserLoginHandler(ctx echo.Context) error
+	CheckUserAvailabilityHandler(ctx echo.Context) error
+	GetCurrentUserProfileHandler(ctx echo.Context) error
+	EditCurrentProfileHandler(ctx echo.Context) error
+	GetUserProfileHandler(ctx echo.Context) error
+	EditProfileHandler(ctx echo.Context) error
+	GetAllUsers(ctx echo.Context) error
 }
 
-func UserLogin(ctx echo.Context) error {
-	data := service.RequestUserLogin{}
-	if err := ctx.Bind(&data); err != nil {
-		c.ErrorF("error binding data: %v", err)
-		return service.NewErrorResponse(ctx, &service.ErrLackParam)
-	}
-	return data.UserLogin().Response(ctx)
+type UserController struct {
+	service UserServiceInterface
 }
 
-func CheckUserAvailability(ctx echo.Context) error {
-	data := service.RequestUserAvailability{}
-	if err := ctx.Bind(&data); err != nil {
-		c.ErrorF("error binding data: %v", err)
-		return service.NewErrorResponse(ctx, &service.ErrLackParam)
-	}
-	return data.CheckAvailability().Response(ctx)
+func NewUserHandler(service UserServiceInterface) *UserController {
+	return &UserController{service}
 }
 
-func GetCurrentUserProfile(ctx echo.Context) error {
+func (controller *UserController) UserRegisterHandler(ctx echo.Context) error {
+	data := &RequestRegisterUser{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	return controller.service.RegisterUser(data).Response(ctx)
+}
+
+func (controller *UserController) UserLoginHandler(ctx echo.Context) error {
+	data := &RequestUserLogin{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	return controller.service.UserLogin(data).Response(ctx)
+}
+
+func (controller *UserController) CheckUserAvailabilityHandler(ctx echo.Context) error {
+	data := &RequestUserAvailability{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	return controller.service.CheckAvailability(data).Response(ctx)
+}
+
+func (controller *UserController) GetCurrentUserProfileHandler(ctx echo.Context) error {
 	token := ctx.Get("user").(*jwt.Token)
-	claim := token.Claims.(*service.Claims)
-	data := service.RequestUserCurrentProfile{Uid: claim.Uid}
-	return data.GetCurrentProfile().Response(ctx)
+	claim := token.Claims.(*Claims)
+	data := &RequestUserCurrentProfile{Uid: claim.Uid}
+	return controller.service.GetCurrentProfile(data).Response(ctx)
 }
 
-func EditCurrentProfile(ctx echo.Context) error {
-	token := ctx.Get("user").(*jwt.Token)
-	claim := token.Claims.(*service.Claims)
-	data := service.RequestUserEditCurrentProfile{}
-	if err := ctx.Bind(&data); err != nil {
+func (controller *UserController) EditCurrentProfileHandler(ctx echo.Context) error {
+	data := &RequestUserEditCurrentProfile{}
+	if err := ctx.Bind(data); err != nil {
 		c.ErrorF("error binding data: %v", err)
-		return service.NewErrorResponse(ctx, &service.ErrLackParam)
+		return NewErrorResponse(ctx, &ErrLackParam)
 	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
 	data.ID = claim.Uid
-	return data.EditCurrentProfile().Response(ctx)
+	data.Cid = claim.Cid
+	return controller.service.EditCurrentProfile(data).Response(ctx)
+}
+
+func (controller *UserController) GetUserProfileHandler(ctx echo.Context) error {
+	data := &RequestUserProfile{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	return controller.service.GetUserProfile(data).Response(ctx)
+}
+
+func (controller *UserController) EditProfileHandler(ctx echo.Context) error {
+	data := &RequestUserEditProfile{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Cid = claim.Cid
+	data.Permission = claim.Permission
+	return controller.service.EditUserProfile(data).Response(ctx)
+}
+
+func (controller *UserController) GetAllUsers(ctx echo.Context) error {
+	data := &RequestUserList{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	return controller.service.GetUserList(data).Response(ctx)
 }

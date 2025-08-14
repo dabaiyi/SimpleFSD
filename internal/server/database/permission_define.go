@@ -6,11 +6,10 @@ type Permission int64
 // 权限节点上限是64, 超过64需要使用切片
 const (
 	AdminEntry Permission = 1 << iota
-	UserShow
+	UserShowList
+	UserGetProfile
 	UserAdd
-	UserEditEmail
-	UserEditUsername
-	UserEditPassword
+	UserEditBaseInfo
 	UserEditPermission
 	UserEditRating
 	ActivityPublish

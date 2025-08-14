@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
+	. "github.com/half-nothing/fsd-server/internal/server/service/interfaces"
 	"gopkg.in/gomail.v2"
 	"html/template"
 	"math/rand"
@@ -14,15 +15,21 @@ import (
 	"time"
 )
 
+var (
+	emailService *EmailService
+	once         sync.Once
+)
+
+type EmailService struct {
+	emailCodes   map[string]EmailCode
+	lastSendTime map[string]time.Time
+	config       *c.Config
+}
+
 type EmailCode struct {
 	code     int
 	cid      int
 	sendTime time.Time
-}
-
-type EmailManager struct {
-	emailCodes   map[string]EmailCode
-	lastSendTime map[string]time.Time
 }
 
 type EmailVerifyTemplateData struct {
@@ -31,29 +38,15 @@ type EmailVerifyTemplateData struct {
 	Expired string
 }
 
-var (
-	emailManager *EmailManager
-	config       *c.Config
-	once         sync.Once
-)
-
-func GetEmailManager() *EmailManager {
+func NewEmailService(config *c.Config) *EmailService {
 	once.Do(func() {
-		config, _ = c.GetConfig()
-		emailManager = &EmailManager{
+		emailService = &EmailService{
+			config:       config,
 			emailCodes:   make(map[string]EmailCode),
 			lastSendTime: make(map[string]time.Time),
 		}
 	})
-	return emailManager
-}
-
-func renderTemplateSafe(template *template.Template, data interface{}) (string, error) {
-	var sb strings.Builder
-	if err := template.Execute(&sb, data); err != nil {
-		return "", err
-	}
-	return sb.String(), nil
+	return emailService
 }
 
 var (
@@ -66,21 +59,25 @@ var (
 	ErrCidMismatch            = errors.New("cid mismatch")
 )
 
-func (evt *EmailVerifyTemplateData) render() (string, error) {
-	if config.Server.HttpServer.Email.Template.EmailVerifyTemplate == nil {
+func (emailService *EmailService) RenderTemplate(template *template.Template, data interface{}) (string, error) {
+	if template == nil {
 		return "", ErrTemplateNotInitialized
 	}
-
-	return renderTemplateSafe(config.Server.HttpServer.Email.Template.EmailVerifyTemplate, evt)
+	var sb strings.Builder
+	if err := template.Execute(&sb, data); err != nil {
+		return "", err
+	}
+	return sb.String(), nil
 }
 
-func (em *EmailManager) VerifyCode(email string, code int, cid int) error {
-	emailCode, ok := em.emailCodes[email]
+func (emailService *EmailService) VerifyCode(email string, code int, cid int) error {
+	email = strings.ToLower(email)
+	emailCode, ok := emailService.emailCodes[email]
 	if !ok {
 		return ErrEmailCodeNotFound
 	}
 
-	if time.Since(emailCode.sendTime) > config.Server.HttpServer.Email.VerifyExpiredDuration {
+	if time.Since(emailCode.sendTime) > emailService.config.Server.HttpServer.Email.VerifyExpiredDuration {
 		return ErrEmailCodeExpired
 	}
 
@@ -92,12 +89,14 @@ func (em *EmailManager) VerifyCode(email string, code int, cid int) error {
 		return ErrCidMismatch
 	}
 
-	delete(em.emailCodes, email)
+	delete(emailService.emailCodes, email)
 	return nil
 }
-func (em *EmailManager) SendEmailVerifyCode(email string, cid int) error {
-	if lastSendTime, ok := em.lastSendTime[email]; ok {
-		if time.Since(lastSendTime) < config.Server.HttpServer.Email.SendDuration {
+
+func (emailService *EmailService) SendEmailCode(email string, cid int) error {
+	email = strings.ToLower(email)
+	if lastSendTime, ok := emailService.lastSendTime[email]; ok {
+		if time.Since(lastSendTime) < emailService.config.Server.HttpServer.Email.SendDuration {
 			return ErrEmailSendInterval
 		}
 	}
@@ -106,65 +105,56 @@ func (em *EmailManager) SendEmailVerifyCode(email string, cid int) error {
 	data := &EmailVerifyTemplateData{
 		Cid:     strconv.Itoa(cid),
 		Code:    strconv.Itoa(code),
-		Expired: strconv.Itoa(int(config.Server.HttpServer.Email.VerifyExpiredDuration.Minutes())),
+		Expired: strconv.Itoa(int(emailService.config.Server.HttpServer.Email.VerifyExpiredDuration.Minutes())),
 	}
 
-	message, err := data.render()
+	message, err := emailService.RenderTemplate(emailService.config.Server.HttpServer.Email.Template.EmailVerifyTemplate, data)
 	if err != nil {
 		c.WarnF("Error rendering email verification template: %v", err)
 		return ErrRenderingTemplate
 	}
 
 	m := gomail.NewMessage()
-	m.SetHeader("From", config.Server.HttpServer.Email.Username)
+	m.SetHeader("From", emailService.config.Server.HttpServer.Email.Username)
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "您的验证码")
 	m.SetBody("text/html", message)
 
-	em.emailCodes[email] = emailCode
-	em.lastSendTime[email] = time.Now()
+	emailService.emailCodes[email] = emailCode
+	emailService.lastSendTime[email] = time.Now()
 
 	c.InfoF("Sending email verification code(%d) to %s(%d)", code, email, cid)
 
-	if err := config.Server.HttpServer.Email.EmailServer.DialAndSend(m); err != nil {
+	if err := emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m); err != nil {
 		return err
 	}
 	return nil
 }
 
-type EmailVerifyCodeData struct {
-	Email string `json:"email"`
-	Cid   int    `json:"cid"`
-}
-
-type EmailVerifyCodeResponse struct {
-	Email string `json:"email"`
-}
-
 var (
-	SendEmailSuccess  = ApiStatus{"SEND_EMAIL_SUCCESS", "邮件发送成功", Ok}
-	ErrRenderTemplate = ApiStatus{"RENDER_TEMPLATE_ERROR", "发送失败", ServerInternalError}
-	ErrSendEmail      = ApiStatus{"EMAIL_SEND_ERROR", "发送失败", ServerInternalError}
+	SendEmailSuccess  = ApiStatus{StatusName: "SEND_EMAIL_SUCCESS", Description: "邮件发送成功", HttpCode: Ok}
+	ErrRenderTemplate = ApiStatus{StatusName: "RENDER_TEMPLATE_ERROR", Description: "发送失败", HttpCode: ServerInternalError}
+	ErrSendEmail      = ApiStatus{StatusName: "EMAIL_SEND_ERROR", Description: "发送失败", HttpCode: ServerInternalError}
 )
 
-func (evc *EmailVerifyCodeData) SendEmailVerifyCode() *ApiResponse[EmailVerifyCodeResponse] {
-	if evc.Email == "" || evc.Cid <= 0 {
-		return NewApiResponse[EmailVerifyCodeResponse](&ErrIllegalParam, Unsatisfied, nil)
+func (emailService *EmailService) SendEmailVerifyCode(req *RequestEmailVerifyCode) *ApiResponse[ResponseEmailVerifyCode] {
+	if req.Email == "" || req.Cid <= 0 {
+		return NewApiResponse[ResponseEmailVerifyCode](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	err := emailManager.SendEmailVerifyCode(evc.Email, evc.Cid)
+	err := emailService.SendEmailCode(req.Email, req.Cid)
 	if err == nil {
-		return NewApiResponse(&SendEmailSuccess, Unsatisfied, &EmailVerifyCodeResponse{evc.Email})
+		return NewApiResponse(&SendEmailSuccess, Unsatisfied, &ResponseEmailVerifyCode{Email: req.Email})
 	}
 	if errors.Is(err, ErrEmailSendInterval) {
-		return NewApiResponse[EmailVerifyCodeResponse](&ApiStatus{
-			"EMAIL_SEND_INTERVAL",
-			fmt.Sprintf("邮件已发送, 请在%d秒后重试",
-				int(config.Server.HttpServer.Email.SendDuration.Seconds())),
-			BadRequest,
+		return NewApiResponse[ResponseEmailVerifyCode](&ApiStatus{
+			StatusName: "EMAIL_SEND_INTERVAL",
+			Description: fmt.Sprintf("邮件已发送, 请在%d秒后重试",
+				int(emailService.config.Server.HttpServer.Email.SendDuration.Seconds())),
+			HttpCode: BadRequest,
 		}, Unsatisfied, nil)
 	}
 	if errors.Is(err, ErrRenderingTemplate) {
-		return NewApiResponse[EmailVerifyCodeResponse](&ErrRenderTemplate, Unsatisfied, nil)
+		return NewApiResponse[ResponseEmailVerifyCode](&ErrRenderTemplate, Unsatisfied, nil)
 	}
-	return NewApiResponse[EmailVerifyCodeResponse](&ErrSendEmail, Unsatisfied, nil)
+	return NewApiResponse[ResponseEmailVerifyCode](&ErrSendEmail, Unsatisfied, nil)
 }

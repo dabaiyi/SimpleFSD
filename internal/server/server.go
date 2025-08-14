@@ -9,6 +9,7 @@ import (
 	mid "github.com/half-nothing/fsd-server/internal/server/middleware"
 	"github.com/half-nothing/fsd-server/internal/server/packet"
 	"github.com/half-nothing/fsd-server/internal/server/service"
+	"github.com/half-nothing/fsd-server/internal/server/service/interfaces"
 	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -24,15 +25,13 @@ import (
 )
 
 var (
-	ErrMissingOrMalformedJwt = service.ApiStatus{StatusName: "MISSING_OR_MALFORMED_JWT", Description: "缺少JWT令牌或者令牌格式错误", HttpCode: service.BadRequest}
-	ErrInvalidOrExpiredJwt   = service.ApiStatus{StatusName: "INVALID_OR_EXPIRED_JWT", Description: "无效或过期的JWT令牌", HttpCode: service.Unauthorized}
-	ErrUnknown               = service.ApiStatus{StatusName: "UNKNOWN_JWT_ERROR", Description: "未知的JWT解析错误", HttpCode: service.ServerInternalError}
+	ErrMissingOrMalformedJwt = interfaces.ApiStatus{StatusName: "MISSING_OR_MALFORMED_JWT", Description: "缺少JWT令牌或者令牌格式错误", HttpCode: interfaces.BadRequest}
+	ErrInvalidOrExpiredJwt   = interfaces.ApiStatus{StatusName: "INVALID_OR_EXPIRED_JWT", Description: "无效或过期的JWT令牌", HttpCode: interfaces.Unauthorized}
+	ErrUnknown               = interfaces.ApiStatus{StatusName: "UNKNOWN_JWT_ERROR", Description: "未知的JWT解析错误", HttpCode: interfaces.ServerInternalError}
 )
 
 func StartHttpServer() {
 	config, _ := c.GetConfig()
-	_ = service.GetEmailManager()
-	service.InitValidator()
 	e := echo.New()
 	e.Logger.SetOutput(io.Discard)
 	e.Logger.SetLevel(log.OFF)
@@ -117,18 +116,18 @@ func StartHttpServer() {
 		SigningKey:  []byte(config.Server.HttpServer.JWT.Secret),
 		TokenLookup: "header:Authorization:Bearer ",
 		NewClaimsFunc: func(c echo.Context) jwt.Claims {
-			return new(service.Claims)
+			return new(interfaces.Claims)
 		},
 		ErrorHandler: func(c echo.Context, err error) error {
-			var data *service.ApiResponse[any]
+			var data *interfaces.ApiResponse[any]
 
 			switch {
 			case errors.Is(err, echojwt.ErrJWTMissing):
-				data = service.NewApiResponse[any](&ErrMissingOrMalformedJwt, service.Unsatisfied, nil)
+				data = interfaces.NewApiResponse[any](&ErrMissingOrMalformedJwt, interfaces.Unsatisfied, nil)
 			case errors.Is(err, echojwt.ErrJWTInvalid):
-				data = service.NewApiResponse[any](&ErrInvalidOrExpiredJwt, service.Unsatisfied, nil)
+				data = interfaces.NewApiResponse[any](&ErrInvalidOrExpiredJwt, interfaces.Unsatisfied, nil)
 			default:
-				data = service.NewApiResponse[any](&ErrUnknown, service.Unsatisfied, nil)
+				data = interfaces.NewApiResponse[any](&ErrUnknown, interfaces.Unsatisfied, nil)
 			}
 
 			return data.Response(c)
@@ -137,15 +136,24 @@ func StartHttpServer() {
 
 	jwtMiddleware := echojwt.WithConfig(jwtConfig)
 
+	emailService := service.NewEmailService(config)
+	service.InitValidator()
+	userService := service.NewUserService(emailService)
+	userController := controller.NewUserHandler(userService)
+	emailController := controller.NewEmailController(emailService)
+
 	apiGroup := e.Group("/api")
-	apiGroup.POST("/sessions", controller.UserLogin)
-	apiGroup.POST("/codes", controller.SendVerifyEmail)
-	apiGroup.GET("/profile", controller.GetCurrentUserProfile, jwtMiddleware)
-	apiGroup.PATCH("/profile", controller.EditCurrentProfile, jwtMiddleware)
+	apiGroup.POST("/sessions", userController.UserLoginHandler)
+	apiGroup.POST("/codes", emailController.SendVerifyEmail)
+	apiGroup.GET("/profile", userController.GetCurrentUserProfileHandler, jwtMiddleware)
+	apiGroup.PATCH("/profile", userController.EditCurrentProfileHandler, jwtMiddleware)
 
 	userGroup := apiGroup.Group("/users")
-	userGroup.POST("", controller.UserRegister)
-	userGroup.GET("/availability", controller.CheckUserAvailability)
+	userGroup.POST("", userController.UserRegisterHandler)
+	userGroup.GET("", userController.GetAllUsers, jwtMiddleware)
+	userGroup.GET("/availability", userController.CheckUserAvailabilityHandler)
+	userGroup.GET("/:uid/profile", userController.GetUserProfileHandler, jwtMiddleware)
+	userGroup.PATCH("/:uid/profile", userController.EditProfileHandler, jwtMiddleware)
 
 	c.GetCleaner().Add(NewHttpServerShutdownCallback(e))
 

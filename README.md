@@ -224,6 +224,9 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 }
 ```
 
+## 链接
+[HTTP API文档](https://3v26cojptv.apifox.cn/334394948e0)
+
 ## 开源协议
 
 MIT License  

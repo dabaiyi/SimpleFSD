@@ -1,5 +1,5 @@
 // Package service
-package service
+package interfaces
 
 import (
 	"github.com/golang-jwt/jwt/v5"
@@ -41,18 +41,17 @@ type ApiResponse[T any] struct {
 
 type Claims struct {
 	Uid        uint   `json:"uid"`
+	Cid        int    `json:"cid"`
 	Username   string `json:"username"`
 	Permission int64  `json:"permission"`
 	FlushToken bool   `json:"flushToken"`
 	jwt.RegisteredClaims
 }
 
-var (
-	ErrIllegalParam = ApiStatus{"PARAM_ERROR", "参数不正确", BadRequest}
-	ErrLackParam    = ApiStatus{"PARAM_LACK_ERROR", "缺少参数", BadRequest}
-	ErrNoPermission = ApiStatus{"NO_PERMISSION", "无权这么做", PermissionDenied}
-	ErrDatabaseFail = ApiStatus{"DATABASE_ERROR", "服务器内部错误", ServerInternalError}
-)
+type JwtHeader struct {
+	Uid        uint
+	Permission int64
+}
 
 func NewClaims(user *database.User, flushToken bool) *Claims {
 	config, _ := c.GetConfig()
@@ -62,6 +61,7 @@ func NewClaims(user *database.User, flushToken bool) *Claims {
 	}
 	return &Claims{
 		Uid:        user.ID,
+		Cid:        user.Cid,
 		Username:   user.Username,
 		Permission: user.Permission,
 		FlushToken: flushToken,
@@ -75,12 +75,23 @@ func NewClaims(user *database.User, flushToken bool) *Claims {
 	}
 }
 
-func (claim *Claims) generateKey() string {
+func (claim *Claims) GenerateKey() string {
 	config, _ := c.GetConfig()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
 	tokenString, _ := token.SignedString([]byte(config.Server.HttpServer.JWT.Secret))
 	return tokenString
 }
+
+func (res *ApiResponse[T]) Response(ctx echo.Context) error {
+	return ctx.JSON(res.HttpCode, res)
+}
+
+var (
+	ErrIllegalParam = ApiStatus{"PARAM_ERROR", "参数不正确", BadRequest}
+	ErrLackParam    = ApiStatus{"PARAM_LACK_ERROR", "缺少参数", BadRequest}
+	ErrNoPermission = ApiStatus{"NO_PERMISSION", "无权这么做", PermissionDenied}
+	ErrDatabaseFail = ApiStatus{"DATABASE_ERROR", "服务器内部错误", ServerInternalError}
+)
 
 func NewErrorResponse(ctx echo.Context, codeStatus *ApiStatus) error {
 	return NewApiResponse[any](codeStatus, Unsatisfied, nil).Response(ctx)
@@ -99,8 +110,4 @@ func NewApiResponse[T any](codeStatus *ApiStatus, httpCode HttpCode, data *T) *A
 		Message:  codeStatus.Description,
 		Data:     data,
 	}
-}
-
-func (res *ApiResponse[T]) Response(ctx echo.Context) error {
-	return ctx.JSON(res.HttpCode, res)
 }
