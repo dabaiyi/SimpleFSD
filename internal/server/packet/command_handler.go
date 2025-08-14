@@ -307,7 +307,7 @@ func (c *ConnectionHandler) handleMessage(data []string, rawLine []byte) *Result
 	} else if strings.HasPrefix(targetStation, "*") {
 		// 广播消息
 		if targetStation == string(AllSup) {
-			clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToSup)
+			go clientManager.BroadcastMessage(rawLine, c.Client, BroadcastToSup)
 		}
 	} else {
 		_ = clientManager.SendMessageTo(targetStation, rawLine)
@@ -326,7 +326,7 @@ func (c *ConnectionHandler) handlePlan(data []string, rawLine []byte) *Result {
 	if c.Client.IsAtc {
 		return resultError(Syntax, false, c.Client.Callsign, fmt.Errorf("atc can not submit fligth plan"))
 	}
-	if err := c.Client.UpdateFlightPlan(data); err != nil {
+	if err := c.Client.UpsertFlightPlan(data); err != nil {
 		return resultError(Syntax, false, c.Client.Callsign, err)
 	}
 	if !c.Client.FlightPlan.Locked {

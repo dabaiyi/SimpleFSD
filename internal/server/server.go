@@ -24,14 +24,15 @@ import (
 )
 
 var (
-	ErrMissingOrMalformedJwt = service.CodeStatus{StatusName: "MISSING_OR_MALFORMED_JWT", Description: "缺少JWT令牌或者令牌格式错误", HttpCode: service.BadRequest}
-	ErrInvalidOrExpiredJwt   = service.CodeStatus{StatusName: "INVALID_OR_EXPIRED_JWT", Description: "无效或过期的JWT令牌", HttpCode: service.Unauthorized}
-	ErrUnknown               = service.CodeStatus{StatusName: "UNKNOWN_JWT_ERROR", Description: "未知的JWT解析错误", HttpCode: service.ServerInternalError}
+	ErrMissingOrMalformedJwt = service.ApiStatus{StatusName: "MISSING_OR_MALFORMED_JWT", Description: "缺少JWT令牌或者令牌格式错误", HttpCode: service.BadRequest}
+	ErrInvalidOrExpiredJwt   = service.ApiStatus{StatusName: "INVALID_OR_EXPIRED_JWT", Description: "无效或过期的JWT令牌", HttpCode: service.Unauthorized}
+	ErrUnknown               = service.ApiStatus{StatusName: "UNKNOWN_JWT_ERROR", Description: "未知的JWT解析错误", HttpCode: service.ServerInternalError}
 )
 
 func StartHttpServer() {
 	config, _ := c.GetConfig()
 	_ = service.GetEmailManager()
+	service.InitValidator()
 	e := echo.New()
 	e.Logger.SetOutput(io.Discard)
 	e.Logger.SetLevel(log.OFF)
@@ -120,6 +121,7 @@ func StartHttpServer() {
 		},
 		ErrorHandler: func(c echo.Context, err error) error {
 			var data *service.ApiResponse[any]
+
 			switch {
 			case errors.Is(err, echojwt.ErrJWTMissing):
 				data = service.NewApiResponse[any](&ErrMissingOrMalformedJwt, service.Unsatisfied, nil)
@@ -139,6 +141,7 @@ func StartHttpServer() {
 	apiGroup.POST("/sessions", controller.UserLogin)
 	apiGroup.POST("/codes", controller.SendVerifyEmail)
 	apiGroup.GET("/profile", controller.GetCurrentUserProfile, jwtMiddleware)
+	apiGroup.PATCH("/profile", controller.EditCurrentProfile, jwtMiddleware)
 
 	userGroup := apiGroup.Group("/users")
 	userGroup.POST("", controller.UserRegister)

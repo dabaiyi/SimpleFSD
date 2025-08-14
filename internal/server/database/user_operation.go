@@ -12,6 +12,7 @@ var (
 	ErrIdentifierTaken = errors.New("user identifiers have been used")
 	ErrPasswordEncode  = errors.New("password encode error")
 	ErrIdentifierCheck = errors.New("identifier check error")
+	ErrOldPassword     = errors.New("old password error")
 )
 
 type UserId interface {
@@ -49,6 +50,20 @@ func (id StringUserId) GetUser() (*User, error) {
 	return &user, nil
 }
 
+func GetUserById(uid uint) (*User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	user := User{}
+	err := database.WithContext(ctx).
+		Where("id = ?", uid).
+		First(&user).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
+	}
+	return &user, nil
+}
+
 func NewUser(username string, email string, cid int, password string) (*User, error) {
 	encodePassword, err := bcrypt.GenerateFromPassword([]byte(password), config.Server.General.BcryptCost)
 	if err != nil {
@@ -65,6 +80,24 @@ func NewUser(username string, email string, cid int, password string) (*User, er
 		TotalPilotTime: 0,
 		TotalAtcTime:   0,
 	}, nil
+}
+
+func (user *User) UpdateInfo(info map[string]interface{}) error {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return database.WithContext(ctx).Model(user).Updates(info).Error
+}
+
+func (user *User) UpdatePassword(originalPassword string, newPassword string) ([]byte, error) {
+	if !user.VerifyPassword(originalPassword) {
+		return nil, ErrOldPassword
+	}
+	encodePassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), config.Server.General.BcryptCost)
+	if err != nil {
+		return nil, ErrPasswordEncode
+	}
+	user.Password = string(encodePassword)
+	return encodePassword, nil
 }
 
 func (user *User) addUser(tx *gorm.DB) error {

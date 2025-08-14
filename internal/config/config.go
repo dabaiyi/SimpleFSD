@@ -109,6 +109,14 @@ type HttpServerConfig struct {
 	RateLimit         int           `json:"rate_limit"`
 	RateLimitWindow   string        `json:"rate_limit_window"`
 	RateLimitDuration time.Duration `json:"-"`
+	UsernameLengthMin int           `json:"username_length_min"`
+	UsernameLengthMax int           `json:"username_length_max"`
+	EmailLengthMin    int           `json:"email_length_min"`
+	EmailLengthMax    int           `json:"email_length_max"`
+	PasswordLengthMin int           `json:"password_length_min"`
+	PasswordLengthMax int           `json:"password_length_max"`
+	CidMin            int           `json:"cid_min"`
+	CidMax            int           `json:"cid_max"`
 	Email             EmailConfig   `json:"email"`
 	JWT               JWTConfig     `json:"jwt"`
 	SSL               SSLConfig     `json:"ssl"`
@@ -192,14 +200,22 @@ func newConfig() *Config {
 				Motd:                make([]string, 0),
 			},
 			HttpServer: HttpServerConfig{
-				Enabled:         false,
-				Host:            "0.0.0.0",
-				Port:            6810,
-				MaxWorkers:      128,
-				CacheTime:       "15s",
-				ProxyType:       0,
-				RateLimit:       100,
-				RateLimitWindow: "1m",
+				Enabled:           false,
+				Host:              "0.0.0.0",
+				Port:              6810,
+				MaxWorkers:        128,
+				CacheTime:         "15s",
+				ProxyType:         0,
+				RateLimit:         100,
+				RateLimitWindow:   "1m",
+				UsernameLengthMin: 4,
+				UsernameLengthMax: 16,
+				EmailLengthMin:    4,
+				EmailLengthMax:    64,
+				PasswordLengthMin: 6,
+				PasswordLengthMax: 64,
+				CidMin:            1,
+				CidMax:            9999,
 				Email: EmailConfig{
 					Host:              "smtp.qq.com",
 					Port:              465,
@@ -308,6 +324,8 @@ func cachedContent(filePath, url string) ([]byte, error) {
 		return nil, fmt.Errorf("file read error: %w", err)
 	}
 
+	InfoF("%s not found, downloading from %s", filePath, url)
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
@@ -321,10 +339,14 @@ func cachedContent(filePath, url string) ([]byte, error) {
 		return nil, fmt.Errorf("HTTP error: %s", resp.Status)
 	}
 
+	InfoF("Connection established with %s", url)
+
 	content, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response error: %w", err)
 	}
+
+	InfoF("%s successfully downloaded, %d bytes", filePath, len(content))
 
 	if err := createFileWithContent(filePath, content); err != nil {
 		return nil, fmt.Errorf("file write error: %w", err)
@@ -352,6 +374,8 @@ func (c *Config) handleConfig() error {
 		config.Server.FSDServer.AirportData = nil
 	} else if err := json.Unmarshal(bytes, &config.Server.FSDServer.AirportData); err != nil {
 		return fmt.Errorf("invalid json file %s, %v", config.Server.FSDServer.AirportDataFile, err)
+	} else {
+		InfoF("Airport data loaded, found %d airports", len(config.Server.FSDServer.AirportData))
 	}
 
 	config.Server.FSDServer.SessionCleanDuration, err = time.ParseDuration(config.Server.FSDServer.SessionCleanTime)
@@ -422,6 +446,64 @@ func (c *Config) handleConfig() error {
 		}
 
 		config.Server.HttpServer.Email.EmailServer = gomail.NewDialer(config.Server.HttpServer.Email.Host, config.Server.HttpServer.Email.Port, config.Server.HttpServer.Email.Username, config.Server.HttpServer.Email.Password)
+
+		if config.Server.HttpServer.UsernameLengthMin <= 0 {
+			return fmt.Errorf("invalid json field http_server.username_length_min, value must larger than 0")
+		}
+		if config.Server.HttpServer.UsernameLengthMin > 64 {
+			return fmt.Errorf("invalid json field http_server.username_length_min, value must less than 64")
+		}
+		if config.Server.HttpServer.UsernameLengthMax <= 0 {
+			return fmt.Errorf("invalid json field http_server.username_length_max, value must larger than 0")
+		}
+		if config.Server.HttpServer.UsernameLengthMax > 64 {
+			return fmt.Errorf("invalid json field http_server.username_length_max, value must less than 64")
+		}
+		if config.Server.HttpServer.UsernameLengthMin >= config.Server.HttpServer.UsernameLengthMax {
+			return fmt.Errorf("invalid json field http_server.username_length_min, value must less than username_length_max")
+		}
+
+		if config.Server.HttpServer.EmailLengthMin <= 0 {
+			return fmt.Errorf("invalid json field http_server.email_length_min, value must larger than 0")
+		}
+		if config.Server.HttpServer.EmailLengthMin > 128 {
+			return fmt.Errorf("invalid json field http_server.email_length_min, value must less than 128")
+		}
+		if config.Server.HttpServer.EmailLengthMax <= 0 {
+			return fmt.Errorf("invalid json field http_server.email_length_max, value must larger than 0")
+		}
+		if config.Server.HttpServer.EmailLengthMax > 128 {
+			return fmt.Errorf("invalid json field http_server.email_length_max, value must less than 128")
+		}
+		if config.Server.HttpServer.EmailLengthMin >= config.Server.HttpServer.EmailLengthMax {
+			return fmt.Errorf("invalid json field http_server.email_length_min, value must less than email_length_max")
+		}
+
+		if config.Server.HttpServer.PasswordLengthMin <= 0 {
+			return fmt.Errorf("invalid json field http_server.password_length_min, value must larger than 0")
+		}
+		if config.Server.HttpServer.PasswordLengthMin > 128 {
+			return fmt.Errorf("invalid json field http_server.password_length_min, value must less than 128")
+		}
+		if config.Server.HttpServer.PasswordLengthMax <= 0 {
+			return fmt.Errorf("invalid json field http_server.password_length_max, value must larger than 0")
+		}
+		if config.Server.HttpServer.PasswordLengthMax > 128 {
+			return fmt.Errorf("invalid json field http_server.password_length_max, value must less than 128")
+		}
+		if config.Server.HttpServer.PasswordLengthMin >= config.Server.HttpServer.PasswordLengthMax {
+			return fmt.Errorf("invalid json field http_server.password_length_min, value must less than password_length_max")
+		}
+
+		if config.Server.HttpServer.CidMin <= 0 {
+			return fmt.Errorf("invalid json field http_server.cid_min, value must larger than 0")
+		}
+		if config.Server.HttpServer.CidMax <= 0 {
+			return fmt.Errorf("invalid json field http_server.cid_max, value must larger than 0")
+		}
+		if config.Server.HttpServer.CidMin >= config.Server.HttpServer.CidMax {
+			return fmt.Errorf("invalid json field http_server.cid_min, value must less than cid_max")
+		}
 	}
 
 	if config.Server.GRPCServer.Enabled {

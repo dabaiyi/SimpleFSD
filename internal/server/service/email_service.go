@@ -142,9 +142,9 @@ type EmailVerifyCodeResponse struct {
 }
 
 var (
-	SendEmailSuccess  = CodeStatus{"SEND_EMAIL_SUCCESS", "邮件发送成功", Ok}
-	ErrRenderTemplate = CodeStatus{"RENDER_TEMPLATE_ERROR", "发送失败", ServerInternalError}
-	ErrSendEmail      = CodeStatus{"EMAIL_SEND_ERROR", "发送失败", ServerInternalError}
+	SendEmailSuccess  = ApiStatus{"SEND_EMAIL_SUCCESS", "邮件发送成功", Ok}
+	ErrRenderTemplate = ApiStatus{"RENDER_TEMPLATE_ERROR", "发送失败", ServerInternalError}
+	ErrSendEmail      = ApiStatus{"EMAIL_SEND_ERROR", "发送失败", ServerInternalError}
 )
 
 func (evc *EmailVerifyCodeData) SendEmailVerifyCode() *ApiResponse[EmailVerifyCodeResponse] {
@@ -156,7 +156,7 @@ func (evc *EmailVerifyCodeData) SendEmailVerifyCode() *ApiResponse[EmailVerifyCo
 		return NewApiResponse(&SendEmailSuccess, Unsatisfied, &EmailVerifyCodeResponse{evc.Email})
 	}
 	if errors.Is(err, ErrEmailSendInterval) {
-		return NewApiResponse[EmailVerifyCodeResponse](&CodeStatus{
+		return NewApiResponse[EmailVerifyCodeResponse](&ApiStatus{
 			"EMAIL_SEND_INTERVAL",
 			fmt.Sprintf("邮件已发送, 请在%d秒后重试",
 				int(config.Server.HttpServer.Email.SendDuration.Seconds())),

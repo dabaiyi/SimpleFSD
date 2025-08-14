@@ -52,7 +52,9 @@ func NewClient(callsign string, rating Rating, protocol int, realName string, so
 	if !isAtc && !config.Server.General.SimulatorServer {
 		var err error
 		flightPlan, err = database.GetFlightPlan(socket.User.Cid)
-		if err != nil {
+		if errors.Is(err, database.ErrFlightPlanNotFound) {
+			logger.WarnF("No flight plan found for %s(%d)", callsign, socket.User.Cid)
+		} else if err != nil {
 			logger.WarnF("Fail to get flight plan for %s(%d): %v", callsign, socket.User.Cid, err)
 		}
 	}
@@ -174,9 +176,9 @@ func (c *Client) MarkedDisconnect(immediate bool) {
 		c.Callsign, config.Server.FSDServer.SessionCleanDuration)
 }
 
-func (c *Client) UpdateFlightPlan(flightPlanData []string) error {
+func (c *Client) UpsertFlightPlan(flightPlanData []string) error {
 	if c.FlightPlan == nil {
-		flightPlan, err := database.CreateFlightPlan(c.User, c.Callsign, flightPlanData)
+		flightPlan, err := database.UpsertFlightPlan(c.User, c.Callsign, flightPlanData)
 		if err != nil {
 			return err
 		}

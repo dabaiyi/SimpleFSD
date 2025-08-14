@@ -26,7 +26,7 @@ func (hc HttpCode) Code() int {
 	return int(hc)
 }
 
-type CodeStatus struct {
+type ApiStatus struct {
 	StatusName  string
 	Description string
 	HttpCode    HttpCode
@@ -40,6 +40,7 @@ type ApiResponse[T any] struct {
 }
 
 type Claims struct {
+	Uid        uint   `json:"uid"`
 	Username   string `json:"username"`
 	Permission int64  `json:"permission"`
 	FlushToken bool   `json:"flushToken"`
@@ -47,9 +48,10 @@ type Claims struct {
 }
 
 var (
-	ErrIllegalParam = CodeStatus{"PARAM_ERROR", "参数不正确", BadRequest}
-	ErrLackParam    = CodeStatus{"PARAM_LACK_ERROR", "缺少参数", BadRequest}
-	ErrNoPermission = CodeStatus{"NO_PERMISSION", "无权这么做", PermissionDenied}
+	ErrIllegalParam = ApiStatus{"PARAM_ERROR", "参数不正确", BadRequest}
+	ErrLackParam    = ApiStatus{"PARAM_LACK_ERROR", "缺少参数", BadRequest}
+	ErrNoPermission = ApiStatus{"NO_PERMISSION", "无权这么做", PermissionDenied}
+	ErrDatabaseFail = ApiStatus{"DATABASE_ERROR", "服务器内部错误", ServerInternalError}
 )
 
 func NewClaims(user *database.User, flushToken bool) *Claims {
@@ -59,6 +61,7 @@ func NewClaims(user *database.User, flushToken bool) *Claims {
 		expiredDuration += config.Server.HttpServer.JWT.RefreshDuration
 	}
 	return &Claims{
+		Uid:        user.ID,
 		Username:   user.Username,
 		Permission: user.Permission,
 		FlushToken: flushToken,
@@ -79,11 +82,11 @@ func (claim *Claims) generateKey() string {
 	return tokenString
 }
 
-func NewErrorResponse(ctx echo.Context, codeStatus *CodeStatus) error {
+func NewErrorResponse(ctx echo.Context, codeStatus *ApiStatus) error {
 	return NewApiResponse[any](codeStatus, Unsatisfied, nil).Response(ctx)
 }
 
-func NewApiResponse[T any](codeStatus *CodeStatus, httpCode HttpCode, data *T) *ApiResponse[T] {
+func NewApiResponse[T any](codeStatus *ApiStatus, httpCode HttpCode, data *T) *ApiResponse[T] {
 	if httpCode == Unsatisfied {
 		httpCode = codeStatus.HttpCode
 	}

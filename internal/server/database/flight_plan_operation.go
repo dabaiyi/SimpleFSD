@@ -8,43 +8,61 @@ import (
 	"gorm.io/gorm"
 )
 
+var (
+	ErrFlightPlanNotFound     = errors.New("flight plan not found")
+	ErrSimulatorServer        = errors.New("simulator server not support flight plan store")
+	ErrFlightPlanDataTooShort = fmt.Errorf("flight plan data is too short")
+	ErrFlightPlanExists       = errors.New("flight plan already exists")
+	ErrFlightPlanLocked       = errors.New("flight plan locked")
+)
+
 func GetFlightPlan(cid int) (*FlightPlan, error) {
 	if config.Server.General.SimulatorServer {
-		return nil, errors.New("simulator server not support flight plan store")
+		return nil, ErrSimulatorServer
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	flightPlan := FlightPlan{}
 	var err error
-	err = database.WithContext(ctx).Where("cid=?", cid).First(&flightPlan).Error
-	if err != nil {
+	err = database.WithContext(ctx).Where("cid = ?", cid).First(&flightPlan).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrFlightPlanNotFound
+	} else if err != nil {
 		return nil, err
 	}
 	return &flightPlan, nil
 }
 
-func CreateFlightPlan(user *User, callsign string, flightPlanData []string) (*FlightPlan, error) {
+func UpsertFlightPlan(user *User, callsign string, flightPlanData []string) (*FlightPlan, error) {
 	if len(flightPlanData) < 17 {
-		return nil, fmt.Errorf("flight plan data is too short")
+		return nil, ErrFlightPlanDataTooShort
 	}
-	flightPlan := FlightPlan{
-		Cid:      user.Cid,
-		Callsign: callsign,
-		Locked:   false,
-		FromWeb:  false,
-		Version:  0,
+	// 再次检查一遍防止重复创建
+	flightPlan, err := GetFlightPlan(user.Cid)
+	if err != nil {
+		flightPlan = &FlightPlan{
+			Cid:      user.Cid,
+			Callsign: callsign,
+			Locked:   false,
+			FromWeb:  false,
+		}
 	}
 	flightPlan.updateFlightPlanData(flightPlanData)
 	// 模拟机服务器就不用写数据库了, 直接返回
 	if config.Server.General.SimulatorServer {
-		return &flightPlan, nil
+		return flightPlan, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	if err := database.WithContext(ctx).Save(&flightPlan).Error; err != nil {
-		return nil, err
-	}
-	return &flightPlan, nil
+	err = database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.WithContext(ctx).Save(flightPlan).Error; errors.Is(err, gorm.ErrDuplicatedKey) {
+			return ErrFlightPlanExists
+		} else if err != nil {
+			return err
+		}
+		return nil
+	})
+	return flightPlan, err
 }
 
 func (flightPlan *FlightPlan) updateFlightPlanData(flightPlanData []string) {
@@ -67,62 +85,17 @@ func (flightPlan *FlightPlan) updateFlightPlanData(flightPlanData []string) {
 
 func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string, atcEdit bool) error {
 	if len(flightPlanData) < 17 {
-		return fmt.Errorf("flight plan data is too short")
+		return ErrFlightPlanDataTooShort
 	}
 	// 模拟机服务器只用更新内存中数据就行
 	flightPlan.updateFlightPlanData(flightPlanData)
 	if config.Server.General.SimulatorServer {
 		return nil
 	}
-	return database.Transaction(func(tx *gorm.DB) error {
-		// 在事务中重新加载最新数据
-		ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-		defer cancel()
-
-		var current FlightPlan
-		if err := tx.WithContext(ctx).Where("id = ?", flightPlan.ID).First(&current).Error; err != nil {
-			return err
-		}
-
-		// 检查锁定状态（使用最新数据）
-		if !atcEdit && current.Locked {
-			return fmt.Errorf("flight plan locked")
-		}
-
-		// 准备更新
-		updates := map[string]interface{}{
-			"flight_type":        flightPlan.FlightType,
-			"aircraft_type":      flightPlan.AircraftType,
-			"tas":                flightPlan.Tas,
-			"departure_airport":  flightPlan.DepartureAirport,
-			"departure_time":     flightPlan.DepartureTime,
-			"atc_departure_time": flightPlan.AtcDepartureTime,
-			"cruise_altitude":    flightPlan.CruiseAltitude,
-			"arrival_airport":    flightPlan.ArrivalAirport,
-			"route_time_hour":    flightPlan.RouteTimeHour,
-			"route_time_minute":  flightPlan.RouteTimeMinute,
-			"fuel_time_hour":     flightPlan.FuelTimeHour,
-			"fuel_time_minute":   flightPlan.FuelTimeMinute,
-			"alternate_airport":  flightPlan.AlternateAirport,
-			"remarks":            flightPlan.Remarks,
-			"route":              flightPlan.Route,
-			"version":            gorm.Expr("version + 1"),
-		}
-
-		result := tx.Model(flightPlan).
-			Where("id = ? AND version = ?", flightPlan.ID, flightPlan.Version).
-			Updates(updates)
-
-		if result.Error != nil {
-			return result.Error
-		}
-
-		if result.RowsAffected == 0 {
-			return fmt.Errorf("flight plan modified by another request")
-		}
-
-		flightPlan.Version++
-		return nil
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.Save(flightPlan).Error
 	})
 }
 
@@ -131,30 +104,26 @@ func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string, atcEdit 
 // 但鬼知道会不会有用户闲的蛋疼手动给服务器发消息
 // 所以还是多验证一点吧）
 func (flightPlan *FlightPlan) UpdateCruiseAltitude(cruiseAltitude string, atcEdit bool) error {
+	flightPlan.CruiseAltitude = cruiseAltitude
+	if config.Server.General.SimulatorServer {
+		return nil
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	db := database.WithContext(ctx).Model(flightPlan)
-
-	if !atcEdit {
-		db = db.Where("locked = ?", false)
+	if !atcEdit && flightPlan.Locked {
+		return ErrFlightPlanLocked
 	}
 
-	result := db.Where("id = ? AND version = ?", flightPlan.ID, flightPlan.Version).
-		Updates(map[string]interface{}{
-			"cruise_altitude": cruiseAltitude,
-			"version":         gorm.Expr("version + 1"),
-		})
-
-	if result.Error != nil {
+	result := database.WithContext(ctx).Model(flightPlan).Where("locked = ?", false).Update("cruise_altitude", cruiseAltitude)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return ErrFlightPlanNotFound
+	} else if result.RowsAffected == 0 {
+		return ErrFlightPlanLocked
+	} else if result.Error != nil {
 		return result.Error
 	}
-
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("flight plan locked or modified by another request")
-	}
-
-	flightPlan.Version++
 	return nil
 }
 
