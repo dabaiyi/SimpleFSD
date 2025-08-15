@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/labstack/gommon/log"
+	"github.com/thanhpk/randstr"
 	"gopkg.in/gomail.v2"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -240,14 +241,17 @@ func newConfig() *Config {
 					},
 				},
 				JWT: JWTConfig{
-					Secret:      "123456",
-					ExpiresTime: "1h",
-					RefreshTime: "1h",
+					Secret:      randstr.String(64),
+					ExpiresTime: "15m",
+					RefreshTime: "1d",
 				},
 				SSL: SSLConfig{
-					Enable:   false,
-					CertFile: "",
-					KeyFile:  "",
+					Enable:          false,
+					EnableHSTS:      false,
+					HstsExpiredTime: 5184000,
+					IncludeDomain:   false,
+					CertFile:        "",
+					KeyFile:         "",
 				},
 			},
 			GRPCServer: GRPCServerConfig{

@@ -30,6 +30,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect
 	github.com/samber/lo v1.49.1 // indirect
 	github.com/samber/slog-echo v1.16.1 // indirect
+	github.com/thanhpk/randstr v1.0.6 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	go.opentelemetry.io/otel v1.36.0 // indirect

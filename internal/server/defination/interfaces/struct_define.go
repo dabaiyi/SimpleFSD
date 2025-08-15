@@ -78,7 +78,7 @@ func NewClaims(user *database.User, flushToken bool) *Claims {
 
 func (claim *Claims) GenerateKey() string {
 	config, _ := c.GetConfig()
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claim)
 	tokenString, _ := token.SignedString([]byte(config.Server.HttpServer.JWT.Secret))
 	return tokenString
 }

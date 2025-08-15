@@ -43,117 +43,199 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 
 ```json5
 {
-  // 调试模式, 会输出大量日志, 请不要在生产环境中打开
-  "debug_mode": false,
-  // 配置文件版本, 通常情况下与软件版本一致
-  "config_version": "0.5.0",
-  // 服务配置
-  "server": {
-    // 通用配置项
-    "general": {
-      // 是否为模拟机服务器
-      // 由于需要实现检查网页提交计划于实际连线计划是否一致
-      // 所以飞行计划存储是用用户cid进行标识的
-      // 但模拟机所有的模拟机都是一个用户cid, 此时就会出问题
-      // 即模拟机计划错误或者无法获取到计划
-      // 这个时候将这个变量设置为true
-      // 这样服务器就会使用呼号作为标识
-      // 但是与此同时就失去了呼号匹配检查的功能
-      // 但网页提交计划仍然可用, 只是没有检查功能
-      // 所以将这个开关命名为模拟机服务器开关
-      "simulator_server": false,
-      // 密码加密轮数
-      "bcrypt_cost": 12,
-      // jwt对称加密秘钥
-      "jwt_secret": "123456",
-      // jwt秘钥过期时间
-      "jwt_expires_time": "1h",
-      // jwt刷新秘钥过期时间
-      // 该时间是在jwt秘钥过期时间之后的时间
-      // 比如两者都是1h, 那么刷新秘钥的过期时间就是2h
-      // 因为不可能你刷新秘钥比主密钥过期还早:(
-      "jwt_refresh_time": "1h"
-    },
-    // FSD服务器配置
-    "fsd_server": {
-      // FSD名称, 会被发送到连接到服务器的客户端作为motd消息
-      "fsd_name": "Simple-Fsd",
-      // FSD服务器监听地址
-      "host": "0.0.0.0",
-      // FSD服务器监听端口
-      "port": 6809,
-      // 是否发送wallop消息到ADM
-      "send_wallop_to_adm": true,
-      // FSD服务器心跳间隔
-      "heartbeat_interval": "60s",
-      // FSD服务器会话过期时间
-      // 在过期时间内重连, 服务器会自动匹配断开时的session
-      // 反之则会创建新session
-      "session_clean_time": "40s",
-      // 最大工作线程数, 也可以理解为最大同时连接的sockets数目
-      "max_workers": 128,
-      // 最大广播线程数, 用于广播消息的最大线程数
-      "max_broadcast_workers": 128,
-      // 要发送到客户端的motd消息
-      "motd": []
-    },
-    // Http服务器配置
-    "http_server": {
-      // 是否启用Http服务器
-      "enabled": false,
-      // Http服务器监听地址
-      "host": "0.0.0.0",
-      // Http服务器监听端口
-      "port": 6810,
-      // Http服务器最大工作线程
-      "max_workers": 128,
-      // Http服务器Api缓存时间
-      "cache_time": "15s",
+   // 调试模式, 会输出大量日志, 请不要在生产环境中打开
+   "debug_mode": false,
+   // 配置文件版本, 通常情况下与软件版本一致
+   "config_version": "0.5.0",
+   // 服务配置
+   "server": {
+      // 通用配置项
+      "general": {
+         // 是否为模拟机服务器
+         // 由于需要实现检查网页提交计划于实际连线计划是否一致
+         // 所以飞行计划存储是用用户cid进行标识的
+         // 但模拟机所有的模拟机都是一个用户cid, 此时就会出问题
+         // 即模拟机计划错误或者无法获取到计划
+         // 这个时候将这个变量设置为true
+         // 这样服务器就会使用呼号作为标识
+         // 但是与此同时就失去了呼号匹配检查的功能
+         // 但网页提交计划仍然可用, 只是没有检查功能
+         // 所以将这个开关命名为模拟机服务器开关
+         "simulator_server": false,
+         // 密码加密轮数
+         "bcrypt_cost": 12
+      },
+      // FSD服务器配置
+      "fsd_server": {
+         // FSD名称, 会被发送到连接到服务器的客户端作为motd消息
+         "fsd_name": "Simple-Fsd",
+         // FSD服务器监听地址
+         "host": "0.0.0.0",
+         // FSD服务器监听端口
+         "port": 6809,
+         // 机场数据路径, 若不存在会自动从github下载
+         "airport_data_file": "data/airport.json",
+         // 是否发送wallop消息到ADM
+         "send_wallop_to_adm": true,
+         // FSD服务器心跳间隔
+         "heartbeat_interval": "60s",
+         // FSD服务器会话过期时间
+         // 在过期时间内重连, 服务器会自动匹配断开时的session
+         // 反之则会创建新session
+         "session_clean_time": "40s",
+         // 最大工作线程数, 也可以理解为最大同时连接的sockets数目
+         "max_workers": 128,
+         // 最大广播线程数, 用于广播消息的最大线程数
+         "max_broadcast_workers": 128,
+         // 要发送到客户端的motd消息
+         "motd": []
+      },
+      // Http服务器配置
+      "http_server": {
+         // 是否启用Http服务器
+         "enabled": false,
+         // Http服务器监听地址
+         "host": "0.0.0.0",
+         // Http服务器监听端口
+         "port": 6810,
+         // Http服务器最大工作线程
+         "max_workers": 128,
+         // whazzup更新时间
+         "whazzup_cache_time": "15s",
+         // 代理类型
+         // 0 直连无代理服务器
+         // 1 代理服务器使用 X-Forwarded-For Http头部
+         // 2 代理服务器使用 X-Real-Ip Http头部
+         "proxy_type": 0,
+         // Api访问限速
+         // 每个IP的每个接口均单独计算
+         "rate_limit": 60,
+         // Api访问限速窗口
+         // 即 rate_limit 每 rate_limit_window
+         // 滑动窗口计算
+         "rate_limit_window": "1m",
+         // 用户名最小长度
+         "username_length_min": 4,
+         // 用户名最大长度(系统支持的最大长度是64)
+         "username_length_max": 16,
+         // 邮箱最小长度
+         "email_length_min": 4,
+         // 邮箱最大长度(系统支持的最大长度是128)
+         "email_length_max": 64,
+         // 密码最小长度
+         "password_length_min": 6,
+         // 密码最大长度(系统支持的最大长度是128)
+         "password_length_max": 64,
+         // 最小CID
+         "cid_min": 1,
+         // 最大CID(系统支持的最大CID为2147483647)
+         "cid_max": 9999,
+         // 邮箱配置
+         "email": {
+            // SMTP服务器地址
+            "host": "smtp.example.com",
+            // SMTP服务器端口
+            "port": 465,
+            // 发信账号
+            "username": "noreply@example.cn",
+            // 发信账号密码或者访问Token
+            "password": "123456",
+            // 邮箱验证码过期时间
+            "verify_expired_time": "5m",
+            // 验证码重复发送间隔
+            "send_interval": "1m",
+            // 邮件模板定义
+            "template": {
+               // 验证码模板文件路径, 不存在会自动从Github上下载
+               "email_verify_template_file": "template/email_verify.template",
+               // 管制权限变更通知模板文件路径, 不存在会自动从Github上下载
+               "atc_rating_change_template_file": "template/atc_rating_change.template",
+               // 启用管制权限变更通知
+               "enable_rating_change_email": true,
+               // 飞控权限变更通知模板文件路径, 不存在会自动从Github上下载
+               "permission_change_template_file": "template/permission_change.template",
+               // 启用飞控权限变更通知
+               "enable_permission_change_email": true,
+               // 踢出服务器通知模板文件路径, 不存在会自动从Github上下载
+               "kicked_from_server_template_file": "template/kicked_from_server.template",
+               // 启用踢出服务器通知
+               "enable_kicked_from_server_email": true
+            }
+         },
+         // JWT配置
+         "jwt": {
+            // JWT对称加密秘钥
+            // 请一定要保护好这个秘钥
+            // 并确保不被任何不信任的人知道
+            // 如果该秘钥泄露, 任何人都可以伪造管理员用户
+            "secret": "123456",
+            // JWT主密钥过期时间
+            // 建议不要大于1小时, 因为JWT秘钥是无状态的
+            // 所以如果主密钥过期时间太长可能会导致安全问题
+            "expires_time": "15m",
+            // JWT刷新秘钥过期时间
+            // 该时间是在JWT主秘钥过期时间之后的时间
+            // 比如两者都是1h, 那么刷新秘钥的过期时间就是2h
+            // 因为不可能你刷新秘钥比主密钥过期还早:(
+            "refresh_time": "1d"
+         },
+         // SSL配置
+         "ssl": {
+            // 是否启用SSL
+            "enable": false,
+            // 是否启用HSTS
+            "enable_hsts": false,
+            // HSTS过期时间(s)
+            "hsts_expired_time": 5184000,
+            // HSTS是否包括子域名
+            // 警告：如果你的其他子域名没有全部部署SSL证书
+            // 打开此开关可能导致没有SSL证书的域名无法访问
+            // 如果不懂请不要打开此开关
+            "include_domain": false,
+            // SSL证书文件路径
+            "cert_file": "",
+            // SSL私钥文件路径
+            "key_file": ""
+         }
+      },
+      // gRPC服务器
+      "grpc_server": {
+         // 是否启用gRPC服务器
+         "enabled": false,
+         // gRPC服务器监听地址
+         "host": "0.0.0.0",
+         // gRPC服务器监听端口
+         "port": 6811,
+         // gRPC服务器Api缓存时间
+         "whazzup_cache_time": "15s"
+      }
+   },
+   // 数据库配置
+   "database": {
+      // 数据库类型, 支持的数据库类型: mysql, postgres, sqlite3
+      "type": "mysql",
+      // 当数据库类型为sqlite3的时候, 这里是数据库存放路径和文件名
+      // 反之则为要使用的数据库名称
+      "database": "go-fsd",
+      // 数据库地址
+      "host": "localhost",
+      // 数据库端口
+      "port": 3306,
+      // 数据库用户名
+      "username": "root",
+      // 数据库密码
+      "password": "123456",
       // 是否启用SSL
       "enable_ssl": false,
-      // 如果启用SSL, 这里填写证书路径
-      "cert_file": "",
-      // 如果启用SSL, 这里填写私钥路径
-      "key_file": ""
-    },
-    // gRPC服务器
-    "grpc_server": {
-      // 是否启用gRPC服务器
-      "enabled": false,
-      // gRPC服务器监听地址
-      "host": "0.0.0.0",
-      // gRPC服务器监听端口
-      "port": 6811,
-      // gRPC服务器Api缓存时间
-      "cache_time": "15s"
-    }
-  },
-  // 数据库配置
-  "database": {
-    // 数据库类型, 支持的数据库类型: mysql, postgres, sqlite3
-    "type": "mysql",
-    // 当数据库类型为sqlite3的时候, 这里是数据库存放路径和文件名
-    // 反之则为要使用的数据库名称
-    "database": "go-fsd",
-    // 数据库地址
-    "host": "localhost",
-    // 数据库端口
-    "port": 3306,
-    // 数据库用户名
-    "username": "root",
-    // 数据库密码
-    "password": "123456",
-    // 是否启用SSL
-    "enable_ssl": false,
-    // 数据库连接池连接超时时间
-    "connect_idle_timeout": "1h",
-    // 连接超时时间
-    "connect_timeout": "5s",
-    // 数据库最大连接数
-    "server_max_connections": 32
-  },
-  // 特殊权限配置, 详情请见`特殊权限配置` 章节
-  "rating": {}
+      // 数据库连接池连接超时时间
+      "connect_idle_timeout": "1h",
+      // 连接超时时间
+      "connect_timeout": "5s",
+      // 数据库最大连接数
+      "server_max_connections": 32
+   },
+   // 特殊权限配置, 详情请见`特殊权限配置` 章节
+   "rating": {}
 }
 ```
 

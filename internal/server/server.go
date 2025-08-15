@@ -113,8 +113,9 @@ func StartHttpServer() {
 	e.Use(mid.RateLimitMiddleware(ipPathLimiter, mid.CombinedKeyFunc))
 
 	jwtConfig := echojwt.Config{
-		SigningKey:  []byte(config.Server.HttpServer.JWT.Secret),
-		TokenLookup: "header:Authorization:Bearer ",
+		SigningKey:    []byte(config.Server.HttpServer.JWT.Secret),
+		TokenLookup:   "header:Authorization:Bearer ",
+		SigningMethod: "HS512",
 		NewClaimsFunc: func(c echo.Context) jwt.Claims {
 			return new(interfaces.Claims)
 		},
