@@ -1,8 +1,14 @@
 # fsd-server
 
-一个用于模拟飞行联飞的FSD, 使用Go语言编写  
+
+
+一个用于模拟飞行联飞的FSD, 使用Go语言编写
+
 FSD支持计划同步, 计划锁定, 网页计划提交
 
+此项目实际上除FSD以外还包括许多有用的api接口，可以在[此处](#链接)找到说明文档，理论上是：FSD+后端的结合体
+
+---
 [![GitHub release](https://img.shields.io/github/v/release/Flyleague-Collection/fsd-server?style=for-the-badge&logo=github)](https://www.github.com/Flyleague-Collection/fsd-server/releases/latest)
 ![GitHub Release Date](https://img.shields.io/github/release-date/Flyleague-Collection/fsd-server?display_date=published_at&style=for-the-badge&logo=github)  
 ![GitHub last commit](https://img.shields.io/github/last-commit/Flyleague-Collection/fsd-server?display_timestamp=committer&style=for-the-badge&logo=github)
@@ -10,22 +16,28 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 ![GitHub top language](https://img.shields.io/github/languages/top/Flyleague-Collection/fsd-server?style=for-the-badge&logo=github)
 ![MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge&logo=github)
 
+
+
 ## 如何使用
 
-您可以
+### 使用方法
 
 1. 在[Release](https://www.github.com/Flyleague-Collection/fsd-server/releases/latest)里面下载对应版本的构建
 2. 克隆整个存储库自己构建
 
-### 如何构建
+
+
+### 构建方法
 
 1. 克隆本仓库
 2. 确保安装了go编译器并且版本>=1.23.4
 3. 在项目根目录运行如下命令`go build -x .\cmd\fsd-server\`
 4. \[可选\]使用upx压缩可执行文件(windows)`upx.exe -9 .\fsd-server.exe`或者(linux)`upx -9 .\fsd-server`
-5. 等待编译完成后, 对于Windows用户, 运行生成的fsd-server.exe; 对于linux用户, 运行生成的fsd-server文件
+5. 等待编译完成后, 对于Windows用户, 运行生成的fsd-server.exe; 对于linux用户, 运行生成的fsd-server文件。注：默认无进程守护，因此推荐使用，宝塔面板的“网站 - Go项目 - 添加项目”进行使用。
 6. 首次运行会在可执行文件同目录创建配置文件`config.json`, 请在编辑配置文件后再次启动
 7. Enjoy
+
+
 
 ### 配置文件简介
 
@@ -145,6 +157,8 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 }
 ```
 
+
+
 ### 权限定义表
 
 #### FSD管制权限一览
@@ -166,6 +180,8 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 | Supervisor    | 11  | 监察者   |                         |
 | Administrator | 12  | 管理员   |                         |
 
+
+
 #### 管制席位一览
 
 | 席位识别名 | 席位编码 | 中文名 | 说明         |
@@ -178,6 +194,8 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 | APP   | 32   | 进近  |            |
 | CTR   | 64   | 区域  |            |
 | FSS   | 128  | 飞服  |            |
+
+
 
 #### 管制权限与管制席位对照一览
 
@@ -197,6 +215,8 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 | Instructor3   | Pilot,OBS,DEL,GND,TWR,APP,CTR,FSS |      |
 | Supervisor    | Pilot,OBS,DEL,GND,TWR,APP,CTR,FSS |      |
 | Administrator | Pilot,OBS,DEL,GND,TWR,APP,CTR,FSS |      |
+
+
 
 ### 特殊权限配置
 
@@ -224,11 +244,37 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 }
 ```
 
+
+
+## 反馈办法
+
+如您在使用FSD中遇到了任何/疑似bug的错误，请提交[issue](https://github.com/Flyleague-Collection/fsd-server/issues/new)在提交时，需要您按照以下步骤进行：
+
+1. 对于可复现的bug:
+   1. 在[配置文件](#配置文件简介)中打开`"debug_mode": true,`以启用log文件
+   2. 重启FSD并复现此bug
+   3. 将log文件上传至[issue](https://github.com/Flyleague-Collection/fsd-server/issues/new)
+2. 对于不可复现的bug:
+   1. 尽可能的用文字描述此bug并提交至[issue](https://github.com/Flyleague-Collection/fsd-server/issues/new)
+
+
+
 ## 链接
+
 [HTTP API文档](https://3v26cojptv.apifox.cn/334394948e0)
+
+
 
 ## 开源协议
 
-MIT License  
-Copyright (c) 2025-2025 Half_nothing  
+MIT License
+
+Copyright (c) 2025 Half_nothing 
+
 无附加条款。
+
+
+
+## 行为准则
+
+在[CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)中查阅
