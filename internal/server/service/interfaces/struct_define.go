@@ -2,6 +2,7 @@
 package interfaces
 
 import (
+	"errors"
 	"github.com/golang-jwt/jwt/v5"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
@@ -87,10 +88,13 @@ func (res *ApiResponse[T]) Response(ctx echo.Context) error {
 }
 
 var (
-	ErrIllegalParam = ApiStatus{"PARAM_ERROR", "参数不正确", BadRequest}
-	ErrLackParam    = ApiStatus{"PARAM_LACK_ERROR", "缺少参数", BadRequest}
-	ErrNoPermission = ApiStatus{"NO_PERMISSION", "无权这么做", PermissionDenied}
-	ErrDatabaseFail = ApiStatus{"DATABASE_ERROR", "服务器内部错误", ServerInternalError}
+	ErrIllegalParam    = ApiStatus{"PARAM_ERROR", "参数不正确", BadRequest}
+	ErrLackParam       = ApiStatus{"PARAM_LACK_ERROR", "缺少参数", BadRequest}
+	ErrNoPermission    = ApiStatus{"NO_PERMISSION", "无权这么做", PermissionDenied}
+	ErrDatabaseFail    = ApiStatus{"DATABASE_ERROR", "服务器内部错误", ServerInternalError}
+	ErrUserNotFound    = ApiStatus{"USER_NOT_FOUND", "指定用户不存在", NotFound}
+	ErrRegisterFail    = ApiStatus{"REGISTER_FAIL", "注册失败", ServerInternalError}
+	ErrIdentifierTaken = ApiStatus{"USER_EXISTS", "用户已存在", BadRequest}
 )
 
 func NewErrorResponse(ctx echo.Context, codeStatus *ApiStatus) error {
@@ -110,4 +114,37 @@ func NewApiResponse[T any](codeStatus *ApiStatus, httpCode HttpCode, data *T) *A
 		Message:  codeStatus.Description,
 		Data:     data,
 	}
+}
+
+func CallDBFuncAndCheckError[R any, T any](fc func() (*R, error)) (*R, *ApiResponse[T]) {
+	result, err := fc()
+	switch {
+	case errors.Is(err, database.ErrIdentifierCheck):
+		return nil, NewApiResponse[T](&ErrRegisterFail, Unsatisfied, nil)
+	case errors.Is(err, database.ErrIdentifierTaken):
+		return nil, NewApiResponse[T](&ErrIdentifierTaken, Unsatisfied, nil)
+	case errors.Is(err, database.ErrUserNotFound):
+		return nil, NewApiResponse[T](&ErrUserNotFound, Unsatisfied, nil)
+	case err != nil:
+		return nil, NewApiResponse[T](&ErrDatabaseFail, Unsatisfied, nil)
+	default:
+		return result, nil
+	}
+}
+
+func GetUsersAndCheckPermission[T any](uid, targetUid uint, perm database.Permission) (*database.User, *database.User, *ApiResponse[T]) {
+	// 敏感操作获取实时数据
+	user, res := CallDBFuncAndCheckError[database.User, T](func() (*database.User, error) { return database.GetUserById(uid) })
+	if res != nil {
+		return nil, nil, res
+	}
+	permission := database.Permission(user.Permission)
+	if !permission.HasPermission(perm) {
+		return nil, nil, NewApiResponse[T](&ErrNoPermission, Unsatisfied, nil)
+	}
+	targetUser, res := CallDBFuncAndCheckError[database.User, T](func() (*database.User, error) { return database.GetUserById(targetUid) })
+	if res != nil {
+		return nil, nil, res
+	}
+	return user, targetUser, nil
 }

@@ -176,6 +176,24 @@ func (user *User) Save() error {
 	return err
 }
 
+func (user *User) UpdateRating(rating int) error {
+	user.Rating = rating
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.Model(user).Update("rating", rating).Error
+	})
+}
+
+func (user *User) UpdatePermission(permission Permission) error {
+	user.Permission = int64(permission)
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.Model(user).Update("permission", int64(permission)).Error
+	})
+}
+
 func (user *User) VerifyPassword(password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	return err == nil

@@ -150,10 +150,12 @@ func StartHttpServer() {
 
 	userGroup := apiGroup.Group("/users")
 	userGroup.POST("", userController.UserRegisterHandler)
-	userGroup.GET("", userController.GetAllUsers, jwtMiddleware)
+	userGroup.GET("", userController.GetUsers, jwtMiddleware)
 	userGroup.GET("/availability", userController.CheckUserAvailabilityHandler)
 	userGroup.GET("/:uid/profile", userController.GetUserProfileHandler, jwtMiddleware)
 	userGroup.PATCH("/:uid/profile", userController.EditProfileHandler, jwtMiddleware)
+	userGroup.PATCH("/:uid/permission", userController.EditUserPermission, jwtMiddleware)
+	userGroup.PUT("/:uid/rating", userController.EditUserRating, jwtMiddleware)
 
 	c.GetCleaner().Add(NewHttpServerShutdownCallback(e))
 

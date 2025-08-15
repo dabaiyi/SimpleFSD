@@ -3,13 +3,11 @@ package service
 
 import (
 	"errors"
+	logger "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
+	"github.com/half-nothing/fsd-server/internal/server/packet"
 	. "github.com/half-nothing/fsd-server/internal/server/service/interfaces"
 	"github.com/half-nothing/fsd-server/internal/utils"
-)
-
-var (
-	ErrUserNotFound = ApiStatus{StatusName: "USER_NOT_FOUND", Description: "指定用户不存在", HttpCode: NotFound}
 )
 
 type UserService struct {
@@ -23,8 +21,6 @@ func NewUserService(emailService EmailServiceInterface) *UserService {
 }
 
 var (
-	ErrRegisterFail     = ApiStatus{StatusName: "REGISTER_FAIL", Description: "注册失败", HttpCode: ServerInternalError}
-	ErrIdentifierTaken  = ApiStatus{StatusName: "USER_EXISTS", Description: "用户已存在", HttpCode: BadRequest}
 	ErrEmailNotFound    = ApiStatus{StatusName: "EMAIL_CODE_NOT_FOUND", Description: "未向该邮箱发送验证码", HttpCode: BadRequest}
 	ErrCidNotMatch      = ApiStatus{StatusName: "CID_NOT_MATCH", Description: "注册cid与验证码发送时的cid不一致", HttpCode: BadRequest}
 	ErrEmailExpired     = ApiStatus{StatusName: "EMAIL_CODE_EXPIRED", Description: "验证码已过期", HttpCode: BadRequest}
@@ -32,50 +28,53 @@ var (
 	SuccessRegister     = ApiStatus{StatusName: "REGISTER_SUCCESS", Description: "注册成功", HttpCode: Ok}
 )
 
-func (userService *UserService) RegisterUser(req *RequestRegisterUser) *ApiResponse[ResponseRegisterUser] {
-	if req.Username == "" || req.Email == "" || req.Password == "" || req.Cid <= 0 || req.EmailCode < 1e5 {
-		return NewApiResponse[ResponseRegisterUser](&ErrIllegalParam, Unsatisfied, nil)
-	}
-	err := userService.emailService.VerifyCode(req.Email, req.EmailCode, req.Cid)
+func (userService *UserService) verifyEmailCode(email string, emailCode, cid int) *ApiStatus {
+	err := userService.emailService.VerifyCode(email, emailCode, cid)
 	switch {
 	case errors.Is(err, ErrEmailCodeNotFound):
-		return NewApiResponse[ResponseRegisterUser](&ErrEmailNotFound, Unsatisfied, nil)
+		return &ErrEmailNotFound
 	case errors.Is(err, ErrEmailCodeExpired):
-		return NewApiResponse[ResponseRegisterUser](&ErrEmailExpired, Unsatisfied, nil)
+		return &ErrEmailExpired
 	case errors.Is(err, ErrInvalidEmailCode):
-		return NewApiResponse[ResponseRegisterUser](&ErrEmailCodeInvalid, Unsatisfied, nil)
+		return &ErrEmailCodeInvalid
 	case errors.Is(err, ErrCidMismatch):
-		return NewApiResponse[ResponseRegisterUser](&ErrCidNotMatch, Unsatisfied, nil)
+		return &ErrCidNotMatch
 	default:
+		return nil
+	}
+}
+
+func (userService *UserService) UserRegister(req *RequestUserRegister) *ApiResponse[ResponseUserRegister] {
+	if req.Username == "" || req.Email == "" || req.Password == "" || req.Cid <= 0 || req.EmailCode < 1e5 {
+		return NewApiResponse[ResponseUserRegister](&ErrIllegalParam, Unsatisfied, nil)
+	}
+	if res := userService.verifyEmailCode(req.Email, req.EmailCode, req.Cid); res != nil {
+		return NewApiResponse[ResponseUserRegister](res, Unsatisfied, nil)
 	}
 	if err := usernameValidator.CheckString(req.Username); err != nil {
-		return NewApiResponse[ResponseRegisterUser](err, Unsatisfied, nil)
+		return NewApiResponse[ResponseUserRegister](err, Unsatisfied, nil)
 	}
 	if err := emailValidator.CheckString(req.Email); err != nil {
-		return NewApiResponse[ResponseRegisterUser](err, Unsatisfied, nil)
+		return NewApiResponse[ResponseUserRegister](err, Unsatisfied, nil)
 	}
 	if err := passwordValidator.CheckString(req.Password); err != nil {
-		return NewApiResponse[ResponseRegisterUser](err, Unsatisfied, nil)
+		return NewApiResponse[ResponseUserRegister](err, Unsatisfied, nil)
 	}
 	if err := cidValidator.CheckInt(req.Cid); err != nil {
-		return NewApiResponse[ResponseRegisterUser](err, Unsatisfied, nil)
+		return NewApiResponse[ResponseUserRegister](err, Unsatisfied, nil)
 	}
 	user, err := database.NewUser(req.Username, req.Email, req.Cid, req.Password)
 	if err != nil {
-		return NewApiResponse[ResponseRegisterUser](&ErrRegisterFail, Unsatisfied, nil)
+		return NewApiResponse[ResponseUserRegister](&ErrRegisterFail, Unsatisfied, nil)
 	}
-	err = user.AddUser()
-	switch {
-	case errors.Is(err, database.ErrIdentifierCheck):
-		return NewApiResponse[ResponseRegisterUser](&ErrRegisterFail, Unsatisfied, nil)
-	case errors.Is(err, database.ErrIdentifierTaken):
-		return NewApiResponse[ResponseRegisterUser](&ErrIdentifierTaken, Unsatisfied, nil)
-	case err != nil:
-		return NewApiResponse[ResponseRegisterUser](&ErrDatabaseFail, Unsatisfied, nil)
+	if _, res := CallDBFuncAndCheckError[interface{}, ResponseUserRegister](func() (*interface{}, error) {
+		return nil, user.AddUser()
+	}); res != nil {
+		return res
 	}
 	token := NewClaims(user, false)
 	flushToken := NewClaims(user, true)
-	return NewApiResponse(&SuccessRegister, Unsatisfied, &ResponseRegisterUser{
+	return NewApiResponse(&SuccessRegister, Unsatisfied, &ResponseUserRegister{
 		Username:   req.Username,
 		Token:      token.GenerateKey(),
 		FlushToken: flushToken.GenerateKey(),
@@ -92,23 +91,25 @@ func (userService *UserService) UserLogin(req *RequestUserLogin) *ApiResponse[Re
 		return NewApiResponse[ResponseUserLogin](&ErrIllegalParam, Unsatisfied, nil)
 	}
 	userId := database.StringUserId(req.Username)
-	user, err := userId.GetUser()
-	if errors.Is(err, database.ErrUserNotFound) {
-		return NewApiResponse[ResponseUserLogin](&ErrUsernameOrPassword, Unsatisfied, nil)
-	} else if err != nil {
-		return NewApiResponse[ResponseUserLogin](&ErrDatabaseFail, Unsatisfied, nil)
+
+	user, res := CallDBFuncAndCheckError[database.User, ResponseUserLogin](func() (*database.User, error) {
+		return userId.GetUser()
+	})
+	if res != nil {
+		return res
 	}
-	pass := user.VerifyPassword(req.Password)
-	token := NewClaims(user, false)
-	flushToken := NewClaims(user, true)
-	if pass {
+
+	if pass := user.VerifyPassword(req.Password); pass {
+		token := NewClaims(user, false)
+		flushToken := NewClaims(user, true)
 		return NewApiResponse(&SuccessLogin, Unsatisfied, &ResponseUserLogin{
 			Username:   user.Username,
 			Token:      token.GenerateKey(),
 			FlushToken: flushToken.GenerateKey(),
 		})
+	} else {
+		return NewApiResponse[ResponseUserLogin](&ErrUsernameOrPassword, Unsatisfied, nil)
 	}
-	return NewApiResponse[ResponseUserLogin](&ErrUsernameOrPassword, Unsatisfied, nil)
 }
 
 var (
@@ -193,17 +194,9 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 			if req.EmailCode <= 0 {
 				return &ErrIllegalParam, nil
 			}
-			err := userService.emailService.VerifyCode(req.Email, req.EmailCode, req.Cid)
-			switch {
-			case errors.Is(err, ErrEmailCodeNotFound):
-				return &ErrEmailNotFound, nil
-			case errors.Is(err, ErrEmailCodeExpired):
-				return &ErrEmailExpired, nil
-			case errors.Is(err, ErrInvalidEmailCode):
-				return &ErrEmailCodeInvalid, nil
-			case errors.Is(err, ErrCidMismatch):
-				return &ErrCidNotMatch, nil
-			default:
+
+			if res := userService.verifyEmailCode(req.Email, req.EmailCode, req.Cid); res != nil {
+				return res, nil
 			}
 		}
 	}
@@ -296,13 +289,13 @@ func (userService *UserService) GetUserProfile(req *RequestUserProfile) *ApiResp
 	if !permission.HasPermission(database.UserGetProfile) {
 		return NewApiResponse[ResponseUserProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
-	user, err := database.GetUserById(req.TargetUid)
-	if errors.Is(err, database.ErrUserNotFound) {
-		return NewApiResponse[ResponseUserProfile](&ErrUserNotFound, Unsatisfied, nil)
-	} else if err != nil {
-		return NewApiResponse[ResponseUserProfile](&ErrDatabaseFail, Unsatisfied, nil)
+	user, res := CallDBFuncAndCheckError[database.User, ResponseUserProfile](func() (*database.User, error) {
+		return database.GetUserById(req.TargetUid)
+	})
+	if res != nil {
+		return res
 	}
-	data := ResponseUserProfile{
+	return NewApiResponse(&SuccessGetProfile, Unsatisfied, &ResponseUserProfile{
 		Username:       user.Username,
 		Email:          user.Email,
 		Cid:            user.Cid,
@@ -311,8 +304,7 @@ func (userService *UserService) GetUserProfile(req *RequestUserProfile) *ApiResp
 		TotalPilotTime: user.TotalPilotTime,
 		TotalAtcTime:   user.TotalAtcTime,
 		Permission:     user.Permission,
-	}
-	return NewApiResponse(&SuccessGetProfile, Unsatisfied, &data)
+	})
 }
 
 var (
@@ -365,13 +357,13 @@ func (userService *UserService) GetUserList(req *RequestUserList) *ApiResponse[R
 		return NewApiResponse[ResponseUserList](&ErrDatabaseFail, Unsatisfied, nil)
 	}
 	data := ResponseUserList{
-		Items:    make([]ResponseUserCurrentProfile, 0, req.PageSize),
+		Items:    make([]UserModel, 0, req.PageSize),
 		Page:     req.Page,
 		PageSize: req.PageSize,
 		Total:    total,
 	}
 	for _, user := range users {
-		data.Items = append(data.Items, ResponseUserCurrentProfile{
+		data.Items = append(data.Items, UserModel{
 			Username:       user.Username,
 			Email:          user.Email,
 			Cid:            user.Cid,
@@ -383,4 +375,101 @@ func (userService *UserService) GetUserList(req *RequestUserList) *ApiResponse[R
 		})
 	}
 	return NewApiResponse(&SuccessGetUsers, Unsatisfied, &data)
+}
+
+var (
+	ErrPermissionNodeNotExists = ApiStatus{StatusName: "PERMISSION_NODE_NOT_EXISTS", Description: "无效权限节点", HttpCode: BadRequest}
+	SuccessEditUserPermission  = ApiStatus{StatusName: "EDIT_USER_PERMISSION", Description: "编辑用户权限成功", HttpCode: Ok}
+)
+
+func (userService *UserService) EditUserPermission(req *RequestUserEditPermission) *ApiResponse[ResponseUserEditPermission] {
+	if req.Uid <= 0 {
+		return NewApiResponse[ResponseUserEditPermission](&ErrIllegalParam, Unsatisfied, nil)
+	}
+	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditPermission](req.Uid, req.TargetUid, database.UserEditPermission)
+	if res != nil {
+		return res
+	}
+	permission := database.Permission(user.Permission)
+	targetPermission := database.Permission(targetUser.Permission)
+	for key, value := range req.Permissions {
+		if per, ok := database.PermissionMap[key]; ok {
+			if !permission.HasPermission(per) {
+				return NewApiResponse[ResponseUserEditPermission](&ErrNoPermission, Unsatisfied, nil)
+			}
+			if value, ok := value.(bool); ok {
+				if value {
+					targetPermission.Grant(per)
+				} else {
+					targetPermission.Revoke(per)
+				}
+			} else {
+				return NewApiResponse[ResponseUserEditPermission](&ErrIllegalParam, Unsatisfied, nil)
+			}
+		} else {
+			return NewApiResponse[ResponseUserEditPermission](&ErrPermissionNodeNotExists, Unsatisfied, nil)
+		}
+	}
+
+	if _, res := CallDBFuncAndCheckError[interface{}, ResponseUserEditPermission](func() (*interface{}, error) {
+		return nil, targetUser.UpdatePermission(targetPermission)
+	}); res != nil {
+		return res
+	}
+
+	if err := userService.emailService.SendPermissionChangeEmail(targetUser, user); err != nil {
+		logger.ErrorF("SendPermissionChangeEmail Failed: %v", err)
+	}
+
+	return NewApiResponse[ResponseUserEditPermission](&SuccessEditUserPermission, Unsatisfied, &ResponseUserEditPermission{
+		Username:       targetUser.Username,
+		Email:          targetUser.Email,
+		Cid:            targetUser.Cid,
+		QQ:             targetUser.QQ,
+		Rating:         targetUser.Rating,
+		TotalPilotTime: targetUser.TotalPilotTime,
+		TotalAtcTime:   targetUser.TotalAtcTime,
+		Permission:     targetUser.Permission,
+	})
+}
+
+var (
+	ErrSameRating         = ApiStatus{StatusName: "SAME_RATING", Description: "用户已是该权限", HttpCode: BadRequest}
+	SuccessEditUserRating = ApiStatus{StatusName: "EDIT_USER_RATING", Description: "编辑用户管制权限成功", HttpCode: Ok}
+)
+
+func (userService *UserService) EditUserRating(req *RequestUserEditRating) *ApiResponse[ResponseUserEditRating] {
+	if req.Uid <= 0 || req.Rating < packet.Ban.Index() || req.Rating > packet.Administrator.Index() {
+		return NewApiResponse[ResponseUserEditRating](&ErrIllegalParam, Unsatisfied, nil)
+	}
+	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditRating](req.Uid, req.TargetUid, database.UserEditRating)
+	if res != nil {
+		return res
+	}
+	oldRating := packet.Rating(targetUser.Rating)
+	newRating := packet.Rating(req.Rating)
+	if oldRating == newRating {
+		return NewApiResponse[ResponseUserEditRating](&ErrSameRating, Unsatisfied, nil)
+	}
+
+	if _, res := CallDBFuncAndCheckError[interface{}, ResponseUserEditRating](func() (*interface{}, error) {
+		return nil, targetUser.UpdateRating(newRating.Index())
+	}); res != nil {
+		return res
+	}
+
+	if err := userService.emailService.SendRatingChangeEmail(targetUser, user, oldRating, newRating); err != nil {
+		logger.ErrorF("SendRatingChangeEmail Failed: %v", err)
+	}
+
+	return NewApiResponse[ResponseUserEditRating](&SuccessEditUserRating, Unsatisfied, &ResponseUserEditRating{
+		Username:       targetUser.Username,
+		Email:          targetUser.Email,
+		Cid:            targetUser.Cid,
+		QQ:             targetUser.QQ,
+		Rating:         targetUser.Rating,
+		TotalPilotTime: targetUser.TotalPilotTime,
+		TotalAtcTime:   targetUser.TotalAtcTime,
+		Permission:     targetUser.Permission,
+	})
 }

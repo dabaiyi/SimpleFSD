@@ -19,6 +19,21 @@ const (
 	ActivityDelete
 )
 
+var PermissionMap = map[string]Permission{
+	"AdminEntry":           AdminEntry,
+	"UserShowList":         UserShowList,
+	"UserGetProfile":       UserGetProfile,
+	"UserAdd":              UserAdd,
+	"UserEditBaseInfo":     UserEditBaseInfo,
+	"UserEditPermission":   UserEditPermission,
+	"UserEditRating":       UserEditRating,
+	"ActivityPublish":      ActivityPublish,
+	"ActivityEditContent":  ActivityEditContent,
+	"ActivityEditFacility": ActivityEditFacility,
+	"ActivityEditState":    ActivityEditState,
+	"ActivityDelete":       ActivityDelete,
+}
+
 func (p *Permission) IsValid() bool {
 	maxPerm := ActivityDelete<<1 - 1 // 计算最大有效位
 	return *p >= 0 && *p <= maxPerm

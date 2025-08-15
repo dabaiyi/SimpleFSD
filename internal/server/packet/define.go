@@ -59,11 +59,11 @@ const (
 )
 
 var ratingString = []string{"Baned", "Pilot", "Observer", "Ground/Delivery", "Tower Controller", "TMA Controller",
-	"Enroute Controller", "Senior Controller", "Instructor 1", "Instructor 2", "Instructor 3",
+	"Enroute Controller", "Enroute Controller(Not in use)", "Senior Controller", "Instructor 1", "Instructor 2", "Instructor 3",
 	"Supervisor", "Administrator"}
 
 func (r Rating) String() string {
-	return ratingString[r]
+	return ratingString[r+1]
 }
 
 func (r Rating) Index() int {

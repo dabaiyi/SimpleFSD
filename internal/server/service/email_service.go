@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
+	"github.com/half-nothing/fsd-server/internal/server/database"
+	"github.com/half-nothing/fsd-server/internal/server/packet"
 	. "github.com/half-nothing/fsd-server/internal/server/service/interfaces"
 	"gopkg.in/gomail.v2"
 	"html/template"
@@ -36,6 +38,20 @@ type EmailVerifyTemplateData struct {
 	Cid     string
 	Code    string
 	Expired string
+}
+
+type EmailPermissionChangeData struct {
+	Cid      string
+	Operator string
+	Contact  string
+}
+
+type EmailRatingChangeData struct {
+	Cid      string
+	NewValue string
+	OldValue string
+	Operator string
+	Contact  string
 }
 
 func NewEmailService(config *c.Config) *EmailService {
@@ -125,10 +141,53 @@ func (emailService *EmailService) SendEmailCode(email string, cid int) error {
 
 	c.InfoF("Sending email verification code(%d) to %s(%d)", code, email, cid)
 
-	if err := emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m); err != nil {
-		return err
+	return emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m)
+}
+
+func (emailService *EmailService) SendPermissionChangeEmail(user *database.User, operator *database.User) error {
+	email := strings.ToLower(user.Email)
+	data := &EmailPermissionChangeData{
+		Cid:      strconv.Itoa(user.Cid),
+		Operator: strconv.Itoa(operator.Cid),
+		Contact:  operator.Email,
 	}
-	return nil
+	message, err := emailService.RenderTemplate(emailService.config.Server.HttpServer.Email.Template.PermissionChangeTemplate, data)
+	if err != nil {
+		c.WarnF("Error rendering email verification template: %v", err)
+		return ErrRenderingTemplate
+	}
+
+	m := gomail.NewMessage()
+	m.SetHeader("From", emailService.config.Server.HttpServer.Email.Username)
+	m.SetHeader("To", email)
+	m.SetHeader("Subject", "管理权限变更通知")
+	m.SetBody("text/html", message)
+
+	return emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m)
+}
+
+func (emailService *EmailService) SendRatingChangeEmail(user *database.User, operator *database.User, oldRating, newRating packet.Rating) error {
+	email := strings.ToLower(user.Email)
+	data := &EmailRatingChangeData{
+		Cid:      strconv.Itoa(user.Cid),
+		OldValue: oldRating.String(),
+		NewValue: newRating.String(),
+		Operator: strconv.Itoa(operator.Cid),
+		Contact:  operator.Email,
+	}
+	message, err := emailService.RenderTemplate(emailService.config.Server.HttpServer.Email.Template.ATCRatingChangeTemplate, data)
+	if err != nil {
+		c.WarnF("Error rendering email verification template: %v", err)
+		return ErrRenderingTemplate
+	}
+
+	m := gomail.NewMessage()
+	m.SetHeader("From", emailService.config.Server.HttpServer.Email.Username)
+	m.SetHeader("To", email)
+	m.SetHeader("Subject", "管制权限变更通知")
+	m.SetBody("text/html", message)
+
+	return emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m)
 }
 
 var (

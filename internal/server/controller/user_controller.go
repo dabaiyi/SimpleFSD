@@ -16,7 +16,9 @@ type UserHandlerInterface interface {
 	EditCurrentProfileHandler(ctx echo.Context) error
 	GetUserProfileHandler(ctx echo.Context) error
 	EditProfileHandler(ctx echo.Context) error
-	GetAllUsers(ctx echo.Context) error
+	GetUsers(ctx echo.Context) error
+	EditUserPermission(ctx echo.Context) error
+	EditUserRating(ctx echo.Context) error
 }
 
 type UserController struct {
@@ -28,12 +30,12 @@ func NewUserHandler(service UserServiceInterface) *UserController {
 }
 
 func (controller *UserController) UserRegisterHandler(ctx echo.Context) error {
-	data := &RequestRegisterUser{}
+	data := &RequestUserRegister{}
 	if err := ctx.Bind(data); err != nil {
 		c.ErrorF("error binding data: %v", err)
 		return NewErrorResponse(ctx, &ErrLackParam)
 	}
-	return controller.service.RegisterUser(data).Response(ctx)
+	return controller.service.UserRegister(data).Response(ctx)
 }
 
 func (controller *UserController) UserLoginHandler(ctx echo.Context) error {
@@ -101,7 +103,7 @@ func (controller *UserController) EditProfileHandler(ctx echo.Context) error {
 	return controller.service.EditUserProfile(data).Response(ctx)
 }
 
-func (controller *UserController) GetAllUsers(ctx echo.Context) error {
+func (controller *UserController) GetUsers(ctx echo.Context) error {
 	data := &RequestUserList{}
 	if err := ctx.Bind(data); err != nil {
 		c.ErrorF("error binding data: %v", err)
@@ -112,4 +114,30 @@ func (controller *UserController) GetAllUsers(ctx echo.Context) error {
 	data.Uid = claim.Uid
 	data.Permission = claim.Permission
 	return controller.service.GetUserList(data).Response(ctx)
+}
+
+func (controller *UserController) EditUserPermission(ctx echo.Context) error {
+	data := &RequestUserEditPermission{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	return controller.service.EditUserPermission(data).Response(ctx)
+}
+
+func (controller *UserController) EditUserRating(ctx echo.Context) error {
+	data := &RequestUserEditRating{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	return controller.service.EditUserRating(data).Response(ctx)
 }
