@@ -5,18 +5,20 @@ import (
 	"errors"
 	logger "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
-	"github.com/half-nothing/fsd-server/internal/server/packet"
-	. "github.com/half-nothing/fsd-server/internal/server/service/interfaces"
+	"github.com/half-nothing/fsd-server/internal/server/defination/fsd"
+	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	"github.com/half-nothing/fsd-server/internal/utils"
 )
 
 type UserService struct {
 	emailService EmailServiceInterface
+	config       *logger.Config
 }
 
-func NewUserService(emailService EmailServiceInterface) *UserService {
+func NewUserService(emailService EmailServiceInterface, config *logger.Config) *UserService {
 	return &UserService{
 		emailService: emailService,
+		config:       config,
 	}
 }
 
@@ -417,8 +419,10 @@ func (userService *UserService) EditUserPermission(req *RequestUserEditPermissio
 		return res
 	}
 
-	if err := userService.emailService.SendPermissionChangeEmail(targetUser, user); err != nil {
-		logger.ErrorF("SendPermissionChangeEmail Failed: %v", err)
+	if userService.config.Server.HttpServer.Email.Template.EnablePermissionChangeEmail {
+		if err := userService.emailService.SendPermissionChangeEmail(targetUser, user); err != nil {
+			logger.ErrorF("SendPermissionChangeEmail Failed: %v", err)
+		}
 	}
 
 	return NewApiResponse[ResponseUserEditPermission](&SuccessEditUserPermission, Unsatisfied, &ResponseUserEditPermission{
@@ -439,15 +443,15 @@ var (
 )
 
 func (userService *UserService) EditUserRating(req *RequestUserEditRating) *ApiResponse[ResponseUserEditRating] {
-	if req.Uid <= 0 || req.Rating < packet.Ban.Index() || req.Rating > packet.Administrator.Index() {
+	if req.Uid <= 0 || req.Rating < fsd.Ban.Index() || req.Rating > fsd.Administrator.Index() {
 		return NewApiResponse[ResponseUserEditRating](&ErrIllegalParam, Unsatisfied, nil)
 	}
 	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditRating](req.Uid, req.TargetUid, database.UserEditRating)
 	if res != nil {
 		return res
 	}
-	oldRating := packet.Rating(targetUser.Rating)
-	newRating := packet.Rating(req.Rating)
+	oldRating := fsd.Rating(targetUser.Rating)
+	newRating := fsd.Rating(req.Rating)
 	if oldRating == newRating {
 		return NewApiResponse[ResponseUserEditRating](&ErrSameRating, Unsatisfied, nil)
 	}
@@ -458,8 +462,10 @@ func (userService *UserService) EditUserRating(req *RequestUserEditRating) *ApiR
 		return res
 	}
 
-	if err := userService.emailService.SendRatingChangeEmail(targetUser, user, oldRating, newRating); err != nil {
-		logger.ErrorF("SendRatingChangeEmail Failed: %v", err)
+	if userService.config.Server.HttpServer.Email.Template.EnableRatingChangeEmail {
+		if err := userService.emailService.SendRatingChangeEmail(targetUser, user, oldRating, newRating); err != nil {
+			logger.ErrorF("SendRatingChangeEmail Failed: %v", err)
+		}
 	}
 
 	return NewApiResponse[ResponseUserEditRating](&SuccessEditUserRating, Unsatisfied, &ResponseUserEditRating{

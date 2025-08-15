@@ -3,7 +3,7 @@ package service
 
 import (
 	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/server/service/interfaces"
+	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 )
 
 type FieldValidator struct {

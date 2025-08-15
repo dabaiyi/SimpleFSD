@@ -55,37 +55,36 @@ func (s *GrpcServer) GetOnlineClient(_ context.Context, _ *Empty) (*OnlineClient
 			continue
 		}
 		s.onlineClient.TotalOnline++
-		if client.IsAtc {
+		if client.IsAtc() {
 			s.onlineClient.AtcOnline++
 			atcInfo := &OnlineAtc{
-				Callsign:   client.Callsign,
-				Username:   client.User.Username,
-				Email:      client.User.Email,
-				Cid:        int32(client.User.Cid),
-				RealName:   client.RealName,
-				Lat:        float32(client.Position[0].Latitude),
-				Lon:        float32(client.Position[0].Longitude),
-				Rating:     int32(client.Rating.Index()),
-				Facility:   client.Facility.String(),
-				Frequency:  int32(client.Frequency + 100000),
-				AtcInfo:    client.AtisInfo,
-				OnlineTime: client.History.StartTime.Unix(),
+				Callsign:   client.Callsign(),
+				Username:   client.User().Username,
+				Email:      client.User().Email,
+				Cid:        int32(client.User().Cid),
+				RealName:   client.RealName(),
+				Lat:        float32(client.Position()[0].Latitude),
+				Lon:        float32(client.Position()[0].Longitude),
+				Rating:     int32(client.Rating().Index()),
+				Facility:   client.Facility().String(),
+				Frequency:  int32(client.Frequency() + 100000),
+				AtcInfo:    client.AtisInfo(),
+				OnlineTime: client.History().StartTime.Unix(),
 			}
 			s.onlineClient.OnlineAtc = append(s.onlineClient.OnlineAtc, atcInfo)
 		} else {
 			s.onlineClient.PilotOnline++
 			pilotInfo := &OnlinePilot{
-				Callsign:    client.Callsign,
-				Username:    client.User.Username,
-				Email:       client.User.Email,
-				Cid:         int32(client.User.Cid),
-				RealName:    client.RealName,
-				Lat:         float32(client.Position[0].Latitude),
-				Lon:         float32(client.Position[0].Longitude),
-				Transponder: int32(client.Transponder),
-				Altitude:    int32(client.Altitude),
-				GroundSpeed: int32(client.GroundSpeed),
-				OnlineTime:  client.History.StartTime.Unix(),
+				Callsign:    client.Callsign(),
+				Username:    client.User().Username,
+				Email:       client.User().Email,
+				Cid:         int32(client.User().Cid),
+				RealName:    client.RealName(),
+				Lat:         float32(client.Position()[0].Latitude),
+				Lon:         float32(client.Position()[0].Longitude),
+				Altitude:    int32(client.Altitude()),
+				GroundSpeed: int32(client.GroundSpeed()),
+				OnlineTime:  client.History().StartTime.Unix(),
 			}
 			s.onlineClient.OnlinePilot = append(s.onlineClient.OnlinePilot, pilotInfo)
 		}

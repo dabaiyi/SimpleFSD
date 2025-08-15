@@ -2,6 +2,7 @@ package packet
 
 import (
 	"bytes"
+	. "github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	"strings"
 )
 

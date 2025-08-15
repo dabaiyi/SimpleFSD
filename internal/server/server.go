@@ -5,11 +5,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/controller"
+	"github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	gs "github.com/half-nothing/fsd-server/internal/server/grpc"
 	mid "github.com/half-nothing/fsd-server/internal/server/middleware"
 	"github.com/half-nothing/fsd-server/internal/server/packet"
 	"github.com/half-nothing/fsd-server/internal/server/service"
-	"github.com/half-nothing/fsd-server/internal/server/service/interfaces"
 	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -138,9 +138,12 @@ func StartHttpServer() {
 
 	emailService := service.NewEmailService(config)
 	service.InitValidator()
-	userService := service.NewUserService(emailService)
+	userService := service.NewUserService(emailService, config)
+	clientManager := packet.GetClientManager()
+	clientService := service.NewClientService(config, clientManager, emailService)
 	userController := controller.NewUserHandler(userService)
 	emailController := controller.NewEmailController(emailService)
+	clientController := controller.NewClientController(clientService)
 
 	apiGroup := e.Group("/api")
 	apiGroup.POST("/sessions", userController.UserLoginHandler)
@@ -156,6 +159,11 @@ func StartHttpServer() {
 	userGroup.PATCH("/:uid/profile", userController.EditProfileHandler, jwtMiddleware)
 	userGroup.PATCH("/:uid/permission", userController.EditUserPermission, jwtMiddleware)
 	userGroup.PUT("/:uid/rating", userController.EditUserRating, jwtMiddleware)
+
+	clientGroup := apiGroup.Group("/clients")
+	clientGroup.GET("", clientController.GetOnlineClients)
+	clientGroup.POST("/:callsign/message", clientController.SendMessageToClient, jwtMiddleware)
+	clientGroup.DELETE("/:callsign", clientController.KillClient, jwtMiddleware)
 
 	c.GetCleaner().Add(NewHttpServerShutdownCallback(e))
 
@@ -242,13 +250,7 @@ func StartFSDServer() {
 		// 使用信号量控制并发连接数
 		sem <- struct{}{}
 		go func(c net.Conn) {
-			connection := &packet.ConnectionHandler{
-				Conn:     conn,
-				ConnId:   conn.RemoteAddr().String(),
-				Callsign: "unknown",
-				Client:   nil,
-				User:     nil,
-			}
+			connection := packet.NewConnectionHandler(conn, conn.RemoteAddr().String())
 			connection.HandleConnection()
 			// 释放信号量
 			<-sem

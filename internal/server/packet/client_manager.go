@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
+	. "github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -12,7 +13,7 @@ import (
 )
 
 type ClientManager struct {
-	clients         map[string]*Client
+	clients         map[string]ClientInterface
 	lock            sync.RWMutex
 	shuttingDown    atomic.Bool
 	clientSlicePool sync.Pool
@@ -30,11 +31,11 @@ func GetClientManager() *ClientManager {
 		config, _ = c.GetConfig()
 		if clientManager == nil {
 			clientManager = &ClientManager{
-				clients:      make(map[string]*Client),
+				clients:      make(map[string]ClientInterface),
 				shuttingDown: atomic.Bool{},
 				clientSlicePool: sync.Pool{
 					New: func() interface{} {
-						return make([]*Client, 0, 128)
+						return make([]ClientInterface, 0, 128)
 					},
 				},
 			}
@@ -44,7 +45,7 @@ func GetClientManager() *ClientManager {
 	return clientManager
 }
 
-func (cm *ClientManager) PutSlice(clients []*Client) {
+func (cm *ClientManager) PutSlice(clients []ClientInterface) {
 	cm.clientSlicePool.Put(clients)
 }
 
@@ -74,12 +75,12 @@ func (cm *ClientManager) Shutdown(ctx context.Context) error {
 	}
 }
 
-func (cm *ClientManager) GetClientSnapshot() []*Client {
+func (cm *ClientManager) GetClientSnapshot() []ClientInterface {
 	cm.lock.RLock()
 	defer cm.lock.RUnlock()
 
 	// 从池中获取切片
-	clients := cm.clientSlicePool.Get().([]*Client)
+	clients := cm.clientSlicePool.Get().([]ClientInterface)
 	clients = clients[:0]
 
 	// 填充客户端
@@ -90,7 +91,7 @@ func (cm *ClientManager) GetClientSnapshot() []*Client {
 }
 
 // 并发断开所有客户端连接
-func (cm *ClientManager) disconnectClients(clients []*Client) {
+func (cm *ClientManager) disconnectClients(clients []ClientInterface) {
 	if len(clients) == 0 {
 		return
 	}
@@ -102,7 +103,7 @@ func (cm *ClientManager) disconnectClients(clients []*Client) {
 		wg.Add(1)
 		sem <- struct{}{}
 
-		go func(c *Client) {
+		go func(c ClientInterface) {
 			defer func() {
 				<-sem
 				wg.Done()
@@ -125,21 +126,21 @@ func (cm *ClientManager) SendHeartBeat() error {
 	return nil
 }
 
-func (cm *ClientManager) AddClient(client *Client) error {
+func (cm *ClientManager) AddClient(client ClientInterface) error {
 	if cm.shuttingDown.Load() {
 		return fmt.Errorf("server shutting down")
 	}
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
 
-	if _, exists := cm.clients[client.Callsign]; exists {
-		return fmt.Errorf("client already registered: %s", client.Callsign)
+	if _, exists := cm.clients[client.Callsign()]; exists {
+		return fmt.Errorf("client already registered: %s", client.Callsign())
 	}
-	cm.clients[client.Callsign] = client
+	cm.clients[client.Callsign()] = client
 	return nil
 }
 
-func (cm *ClientManager) GetClient(callsign string) (*Client, bool) {
+func (cm *ClientManager) GetClient(callsign string) (ClientInterface, bool) {
 	if cm.shuttingDown.Load() {
 		return nil, false
 	}
@@ -170,14 +171,26 @@ func (cm *ClientManager) SendMessageTo(callsign string, message []byte) error {
 
 	client, exists := cm.GetClient(callsign)
 	if !exists {
-		return fmt.Errorf("client not found: %s", callsign)
+		return ErrCallsignNotFound
 	}
 
 	client.SendLine(message)
 	return nil
 }
 
-func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, filter BroadcastFilter) {
+func (cm *ClientManager) SendRawMessageTo(from int, to string, message string) error {
+	client, exists := cm.GetClient(to)
+	if !exists {
+		return ErrCallsignNotFound
+	}
+
+	bytes := makePacket(Message, fmt.Sprintf("%04d", from), to, message)
+
+	client.SendLine(bytes)
+	return nil
+}
+
+func (cm *ClientManager) BroadcastMessage(message []byte, fromClient ClientInterface, filter BroadcastFilter) {
 	if cm.shuttingDown.Load() || len(message) == 0 {
 		return
 	}
@@ -209,7 +222,7 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient *Client, fi
 
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(cl *Client) {
+		go func(cl ClientInterface) {
 			defer func() {
 				<-sem
 				wg.Done()

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	logger "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
+	. "github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	"net"
 	"sync/atomic"
 	"time"
@@ -16,73 +17,98 @@ var (
 )
 
 type ConnectionHandler struct {
-	Conn         net.Conn
-	ConnId       string
-	Callsign     string
-	Client       *Client
-	User         *database.User
-	Disconnected atomic.Bool
+	conn         net.Conn
+	connId       string
+	callsign     string
+	client       ClientInterface
+	user         *database.User
+	disconnected atomic.Bool
+}
+
+func NewConnectionHandler(conn net.Conn, connId string) *ConnectionHandler {
+	return &ConnectionHandler{
+		conn:         conn,
+		connId:       connId,
+		callsign:     "unknown",
+		client:       nil,
+		user:         nil,
+		disconnected: atomic.Bool{},
+	}
 }
 
 func (c *ConnectionHandler) SendError(result *Result) {
-	if result.success {
+	if result.Success {
 		return
 	}
-	if c.Client != nil {
-		c.Client.SendError(result)
+	if c.client != nil {
+		c.client.SendError(result)
 		return
 	}
-	packet := makePacket(Error, "server", c.Callsign, fmt.Sprintf("%03d", result.errno.Index()), result.env, result.errno.String())
-	logger.DebugF("[%s](%s) <- %s", c.ConnId, c.Callsign, packet[:len(packet)-splitSignLen])
-	_, _ = c.Conn.Write(packet)
-	if result.fatal {
-		c.Disconnected.Store(true)
+	packet := makePacket(Error, "server", c.callsign, fmt.Sprintf("%03d", result.Errno.Index()), result.Env, result.Errno.String())
+	logger.DebugF("[%s](%s) <- %s", c.connId, c.callsign, packet[:len(packet)-splitSignLen])
+	_, _ = c.conn.Write(packet)
+	if result.Fatal {
+		c.disconnected.Store(true)
 		time.AfterFunc(500*time.Millisecond, func() {
-			_ = c.Conn.Close()
+			_ = c.conn.Close()
 		})
 	}
 }
 
 func (c *ConnectionHandler) handleLine(line []byte) {
-	if c.Disconnected.Load() {
+	if c.disconnected.Load() {
 		return
 	}
 	command, data := parserCommandLine(line)
 	result := c.handleCommand(command, data, line)
 	if result == nil {
-		logger.WarnF("[%s](%s) handleCommand return a nil result", c.ConnId, c.Callsign)
+		logger.WarnF("[%s](%s) handleCommand return a nil result", c.connId, c.callsign)
 		return
 	}
-	if !result.success {
-		logger.ErrorF("[%s](%s) handleCommand fail, %s, %s", c.ConnId, c.Callsign, result.errno.String(), result.err.Error())
+	if !result.Success {
+		logger.ErrorF("[%s](%s) handleCommand fail, %s, %s", c.connId, c.callsign, result.Errno.String(), result.Err.Error())
 		c.SendError(result)
 	}
 }
 
 func (c *ConnectionHandler) HandleConnection() {
 	defer func() {
-		logger.DebugF("[%s](%s) x Connection closed", c.ConnId, c.Callsign)
-		if err := c.Conn.Close(); err != nil && !isNetClosedError(err) {
-			logger.WarnF("[%s](%s) Error occurred while closing connection, details: %v", c.ConnId, c.Callsign, err)
+		logger.DebugF("[%s](%s) x Connection closed", c.connId, c.callsign)
+		if err := c.conn.Close(); err != nil && !isNetClosedError(err) {
+			logger.WarnF("[%s](%s) Error occurred while closing connection, details: %v", c.connId, c.callsign, err)
 		}
 	}()
-	scanner := bufio.NewScanner(c.Conn)
+	scanner := bufio.NewScanner(c.conn)
 	scanner.Split(createSplitFunc(splitSign))
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		logger.DebugF("[%s](%s) -> %s", c.ConnId, c.Callsign, line)
+		logger.DebugF("[%s](%s) -> %s", c.connId, c.callsign, line)
 		c.handleLine(line)
-		if c.Disconnected.Load() {
+		if c.disconnected.Load() {
 			break
 		}
 	}
 
-	if c.Client != nil {
-		if c.Client.IsAtc {
-			clientManager.BroadcastMessage(makePacket(RemoveAtc, c.Client.Callsign, "SERVER"), c.Client, BroadcastToClientInRange)
+	if c.client != nil {
+		if c.client.IsAtc() {
+			clientManager.BroadcastMessage(makePacket(RemoveAtc, c.client.Callsign(), "SERVER"), c.client, BroadcastToClientInRange)
 		} else {
-			clientManager.BroadcastMessage(makePacket(RemovePilot, c.Client.Callsign, "SERVER"), c.Client, BroadcastToClientInRange)
+			clientManager.BroadcastMessage(makePacket(RemovePilot, c.client.Callsign(), "SERVER"), c.client, BroadcastToClientInRange)
 		}
-		c.Client.MarkedDisconnect(false)
+		c.client.MarkedDisconnect(false)
 	}
 }
+
+func (c *ConnectionHandler) Callsign() string { return c.callsign }
+
+func (c *ConnectionHandler) SetCallsign(callsign string) { c.callsign = callsign }
+
+func (c *ConnectionHandler) User() *database.User { return c.user }
+
+func (c *ConnectionHandler) SetUser(user *database.User) { c.user = user }
+
+func (c *ConnectionHandler) ConnId() string { return c.connId }
+
+func (c *ConnectionHandler) Conn() net.Conn { return c.conn }
+
+func (c *ConnectionHandler) SetDisconnected(disconnect bool) { c.disconnected.Store(disconnect) }

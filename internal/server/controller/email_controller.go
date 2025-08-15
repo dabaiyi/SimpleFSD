@@ -2,7 +2,7 @@
 package controller
 
 import (
-	. "github.com/half-nothing/fsd-server/internal/server/service/interfaces"
+	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	"github.com/labstack/echo/v4"
 )
 
@@ -18,10 +18,10 @@ func NewEmailController(emailService EmailServiceInterface) *EmailController {
 	return &EmailController{emailService}
 }
 
-func (emailController *EmailController) SendVerifyEmail(ctx echo.Context) error {
+func (controller *EmailController) SendVerifyEmail(ctx echo.Context) error {
 	data := &RequestEmailVerifyCode{}
 	if err := ctx.Bind(data); err != nil {
 		return NewErrorResponse(ctx, &ErrLackParam)
 	}
-	return emailController.emailService.SendEmailVerifyCode(data).Response(ctx)
+	return controller.emailService.SendEmailVerifyCode(data).Response(ctx)
 }

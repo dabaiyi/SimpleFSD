@@ -4,7 +4,7 @@ import (
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server"
 	"github.com/half-nothing/fsd-server/internal/server/database"
-	"github.com/half-nothing/fsd-server/internal/server/packet"
+	"github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 )
 
 func main() {
@@ -13,7 +13,7 @@ func main() {
 		c.FatalF("Error occurred while reading config %v", err)
 		return
 	}
-	err = packet.SyncRatingConfig()
+	err = fsd.SyncRatingConfig()
 	if err != nil {
 		c.FatalF("Error occurred while handle rating config, details: %v", err)
 		return

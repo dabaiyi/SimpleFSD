@@ -3,7 +3,7 @@ package interfaces
 
 import (
 	"github.com/half-nothing/fsd-server/internal/server/database"
-	"github.com/half-nothing/fsd-server/internal/server/packet"
+	"github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	"html/template"
 )
 
@@ -13,7 +13,8 @@ type EmailServiceInterface interface {
 	SendEmailCode(email string, cid int) error
 	SendEmailVerifyCode(req *RequestEmailVerifyCode) *ApiResponse[ResponseEmailVerifyCode]
 	SendPermissionChangeEmail(user *database.User, operator *database.User) error
-	SendRatingChangeEmail(user *database.User, operator *database.User, oldRating, newRating packet.Rating) error
+	SendRatingChangeEmail(user *database.User, operator *database.User, oldRating, newRating fsd.Rating) error
+	SendKickedFromServerEmail(user *database.User, operator *database.User, reason string) error
 }
 
 type RequestEmailVerifyCode struct {

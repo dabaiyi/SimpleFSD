@@ -27,6 +27,7 @@ const (
 	EmailVerifyTemplateFileUrl      = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/email_verify.template"
 	ATCRatingChangeTemplateFileUrl  = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/atc_rating_change.template"
 	PermissionChangeTemplateFileUrl = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/permission_change.template"
+	KickedFromServerTemplateFileUrl = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/kicked_from_server.template"
 )
 
 type AirportData struct {
@@ -80,8 +81,13 @@ type EmailTemplateConfig struct {
 	EmailVerifyTemplate          *template.Template `json:"-"`
 	ATCRatingChangeTemplateFile  string             `json:"atc_rating_change_template_file"`
 	ATCRatingChangeTemplate      *template.Template `json:"-"`
+	EnableRatingChangeEmail      bool               `json:"enable_rating_change_email"`
 	PermissionChangeTemplateFile string             `json:"permission_change_template_file"`
 	PermissionChangeTemplate     *template.Template `json:"-"`
+	EnablePermissionChangeEmail  bool               `json:"enable_permission_change_email"`
+	KickedFromServerTemplateFile string             `json:"kicked_from_server_template_file"`
+	KickedFromServerTemplate     *template.Template `json:"-"`
+	EnableKickedFromServerEmail  bool               `json:"enable_kicked_from_server_email"`
 }
 
 type EmailConfig struct {
@@ -103,7 +109,7 @@ type HttpServerConfig struct {
 	Port              uint64        `json:"port"`
 	Address           string        `json:"-"`
 	MaxWorkers        int           `json:"max_workers"` // 并发线程数
-	CacheTime         string        `json:"cache_time"`
+	CacheTime         string        `json:"whazzup_cache_time"`
 	CacheDuration     time.Duration `json:"-"`
 	ProxyType         int           `json:"proxy_type"`
 	RateLimit         int           `json:"rate_limit"`
@@ -127,7 +133,7 @@ type GRPCServerConfig struct {
 	Host          string        `json:"host"`
 	Port          uint64        `json:"port"`
 	Address       string        `json:"-"`
-	CacheTime     string        `json:"cache_time"`
+	CacheTime     string        `json:"whazzup_cache_time"`
 	CacheDuration time.Duration `json:"-"`
 }
 
@@ -226,7 +232,11 @@ func newConfig() *Config {
 					Template: EmailTemplateConfig{
 						EmailVerifyTemplateFile:      "template/email_verify.template",
 						ATCRatingChangeTemplateFile:  "template/atc_rating_change.template",
+						EnableRatingChangeEmail:      true,
 						PermissionChangeTemplateFile: "template/permission_change.template",
+						EnablePermissionChangeEmail:  true,
+						KickedFromServerTemplateFile: "template/kicked_from_server.template",
+						EnableKickedFromServerEmail:  true,
 					},
 				},
 				JWT: JWTConfig{
@@ -429,20 +439,34 @@ func (c *Config) handleConfig() error {
 			config.Server.HttpServer.Email.Template.EmailVerifyTemplate = parse
 		}
 
-		if bytes, err := cachedContent(config.Server.HttpServer.Email.Template.ATCRatingChangeTemplateFile, ATCRatingChangeTemplateFileUrl); err != nil {
-			return fmt.Errorf("fail to load http_server.email.atc_rating_change_template_file, %v", err)
-		} else if parse, err := template.New("atc_rating_change").Parse(string(bytes)); err != nil {
-			return fmt.Errorf("fail to parse atc_rating_change_template, %v", err)
-		} else {
-			config.Server.HttpServer.Email.Template.ATCRatingChangeTemplate = parse
+		if config.Server.HttpServer.Email.Template.EnableRatingChangeEmail {
+			if bytes, err := cachedContent(config.Server.HttpServer.Email.Template.ATCRatingChangeTemplateFile, ATCRatingChangeTemplateFileUrl); err != nil {
+				return fmt.Errorf("fail to load http_server.email.atc_rating_change_template_file, %v", err)
+			} else if parse, err := template.New("atc_rating_change").Parse(string(bytes)); err != nil {
+				return fmt.Errorf("fail to parse atc_rating_change_template, %v", err)
+			} else {
+				config.Server.HttpServer.Email.Template.ATCRatingChangeTemplate = parse
+			}
 		}
 
-		if bytes, err := cachedContent(config.Server.HttpServer.Email.Template.PermissionChangeTemplateFile, PermissionChangeTemplateFileUrl); err != nil {
-			return fmt.Errorf("fail to load http_server.email.permission_change_template_file, %v", err)
-		} else if parse, err := template.New("permission_change").Parse(string(bytes)); err != nil {
-			return fmt.Errorf("fail to parse permission_change_template, %v", err)
-		} else {
-			config.Server.HttpServer.Email.Template.PermissionChangeTemplate = parse
+		if config.Server.HttpServer.Email.Template.EnablePermissionChangeEmail {
+			if bytes, err := cachedContent(config.Server.HttpServer.Email.Template.PermissionChangeTemplateFile, PermissionChangeTemplateFileUrl); err != nil {
+				return fmt.Errorf("fail to load http_server.email.permission_change_template_file, %v", err)
+			} else if parse, err := template.New("permission_change").Parse(string(bytes)); err != nil {
+				return fmt.Errorf("fail to parse permission_change_template, %v", err)
+			} else {
+				config.Server.HttpServer.Email.Template.PermissionChangeTemplate = parse
+			}
+		}
+
+		if config.Server.HttpServer.Email.Template.EnableKickedFromServerEmail {
+			if bytes, err := cachedContent(config.Server.HttpServer.Email.Template.KickedFromServerTemplateFile, KickedFromServerTemplateFileUrl); err != nil {
+				return fmt.Errorf("fail to load http_server.email.permission_change_template_file, %v", err)
+			} else if parse, err := template.New("kicked_from_server").Parse(string(bytes)); err != nil {
+				return fmt.Errorf("fail to parse permission_change_template, %v", err)
+			} else {
+				config.Server.HttpServer.Email.Template.KickedFromServerTemplate = parse
+			}
 		}
 
 		config.Server.HttpServer.Email.EmailServer = gomail.NewDialer(config.Server.HttpServer.Email.Host, config.Server.HttpServer.Email.Port, config.Server.HttpServer.Email.Username, config.Server.HttpServer.Email.Password)

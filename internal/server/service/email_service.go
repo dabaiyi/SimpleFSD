@@ -6,8 +6,8 @@ import (
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
-	"github.com/half-nothing/fsd-server/internal/server/packet"
-	. "github.com/half-nothing/fsd-server/internal/server/service/interfaces"
+	"github.com/half-nothing/fsd-server/internal/server/defination/fsd"
+	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	"gopkg.in/gomail.v2"
 	"html/template"
 	"math/rand"
@@ -50,6 +50,14 @@ type EmailRatingChangeData struct {
 	Cid      string
 	NewValue string
 	OldValue string
+	Operator string
+	Contact  string
+}
+
+type EmailKickedFromServerData struct {
+	Cid      string
+	Time     string
+	Reason   string
 	Operator string
 	Contact  string
 }
@@ -166,13 +174,13 @@ func (emailService *EmailService) SendPermissionChangeEmail(user *database.User,
 	return emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m)
 }
 
-func (emailService *EmailService) SendRatingChangeEmail(user *database.User, operator *database.User, oldRating, newRating packet.Rating) error {
+func (emailService *EmailService) SendRatingChangeEmail(user *database.User, operator *database.User, oldRating, newRating fsd.Rating) error {
 	email := strings.ToLower(user.Email)
 	data := &EmailRatingChangeData{
 		Cid:      strconv.Itoa(user.Cid),
 		OldValue: oldRating.String(),
 		NewValue: newRating.String(),
-		Operator: strconv.Itoa(operator.Cid),
+		Operator: fmt.Sprintf("%04d", operator.Cid),
 		Contact:  operator.Email,
 	}
 	message, err := emailService.RenderTemplate(emailService.config.Server.HttpServer.Email.Template.ATCRatingChangeTemplate, data)
@@ -185,6 +193,30 @@ func (emailService *EmailService) SendRatingChangeEmail(user *database.User, ope
 	m.SetHeader("From", emailService.config.Server.HttpServer.Email.Username)
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "管制权限变更通知")
+	m.SetBody("text/html", message)
+
+	return emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m)
+}
+
+func (emailService *EmailService) SendKickedFromServerEmail(user *database.User, operator *database.User, reason string) error {
+	email := strings.ToLower(user.Email)
+	data := &EmailKickedFromServerData{
+		Cid:      strconv.Itoa(user.Cid),
+		Time:     time.Now().Format(time.DateTime),
+		Reason:   reason,
+		Operator: fmt.Sprintf("%04d", operator.Cid),
+		Contact:  operator.Email,
+	}
+	message, err := emailService.RenderTemplate(emailService.config.Server.HttpServer.Email.Template.KickedFromServerTemplate, data)
+	if err != nil {
+		c.WarnF("Error rendering email verification template: %v", err)
+		return ErrRenderingTemplate
+	}
+
+	m := gomail.NewMessage()
+	m.SetHeader("From", emailService.config.Server.HttpServer.Email.Username)
+	m.SetHeader("To", email)
+	m.SetHeader("Subject", "踢出服务器通知")
 	m.SetBody("text/html", message)
 
 	return emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m)

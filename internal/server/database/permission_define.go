@@ -17,6 +17,8 @@ const (
 	ActivityEditFacility
 	ActivityEditState
 	ActivityDelete
+	ClientSendMessage
+	ClientKill
 )
 
 var PermissionMap = map[string]Permission{
@@ -32,10 +34,12 @@ var PermissionMap = map[string]Permission{
 	"ActivityEditFacility": ActivityEditFacility,
 	"ActivityEditState":    ActivityEditState,
 	"ActivityDelete":       ActivityDelete,
+	"ClientSendMessage":    ClientSendMessage,
+	"ClientKill":           ClientKill,
 }
 
 func (p *Permission) IsValid() bool {
-	maxPerm := ActivityDelete<<1 - 1 // 计算最大有效位
+	maxPerm := ClientKill<<1 - 1 // 计算最大有效位
 	return *p >= 0 && *p <= maxPerm
 }
 
