@@ -5,47 +5,47 @@ import (
 )
 
 type User struct {
-	ID              uint   `gorm:"primarykey"`
-	Username        string `gorm:"size:64;uniqueIndex;not null"`
-	Email           string `gorm:"size:128;uniqueIndex;not null"`
-	Cid             int    `gorm:"uniqueIndex;not null"`
-	Password        string `gorm:"size:128;not null"`
-	QQ              int    `gorm:"default:0"`
-	Rating          int    `gorm:"default:0"`
-	Permission      int64  `gorm:"default:0"`
-	TotalPilotTime  int    `gorm:"default:0"`
-	TotalAtcTime    int    `gorm:"default:0"`
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	FlightPlans     []FlightPlan    `gorm:"foreignKey:Cid;references:Cid"`
-	OnlineHistories []History       `gorm:"foreignKey:Cid;references:Cid"`
-	ActivityAtc     []ActivityATC   `gorm:"foreignKey:Cid;references:Cid"`
-	ActivityPilot   []ActivityPilot `gorm:"foreignKey:Cid;references:Cid"`
+	ID              uint            `gorm:"primarykey" json:"-"`
+	Username        string          `gorm:"size:64;uniqueIndex;not null" json:"username"`
+	Email           string          `gorm:"size:128;uniqueIndex;not null" json:"email"`
+	Cid             int             `gorm:"uniqueIndex;not null" json:"cid"`
+	Password        string          `gorm:"size:128;not null" json:"-"`
+	QQ              int             `gorm:"default:0" json:"qq"`
+	Rating          int             `gorm:"default:0" json:"rating"`
+	Permission      int64           `gorm:"default:0" json:"permission"`
+	TotalPilotTime  int             `gorm:"default:0" json:"total_pilot_time"`
+	TotalAtcTime    int             `gorm:"default:0" json:"total_atc_time"`
+	CreatedAt       time.Time       `json:"-"`
+	UpdatedAt       time.Time       `json:"-"`
+	FlightPlans     []FlightPlan    `gorm:"foreignKey:Cid;references:Cid" json:"-"`
+	OnlineHistories []History       `gorm:"foreignKey:Cid;references:Cid" json:"-"`
+	ActivityAtc     []ActivityATC   `gorm:"foreignKey:Cid;references:Cid" json:"-"`
+	ActivityPilot   []ActivityPilot `gorm:"foreignKey:Cid;references:Cid" json:"-"`
 }
 
 type FlightPlan struct {
-	ID               uint   `gorm:"primarykey"`
-	Cid              int    `gorm:"index;not null"`
-	Callsign         string `gorm:"size:16;uniqueIndex;not null"`
-	FlightType       string `gorm:"size:4;not null"`
-	AircraftType     string `gorm:"size:16;not null"`
-	Tas              int    `gorm:"not null"`
-	DepartureAirport string `gorm:"size:4;not null"`
-	DepartureTime    int    `gorm:"not null"`
-	AtcDepartureTime int    `gorm:"not null"`
-	CruiseAltitude   string `gorm:"size:8;not null"`
-	ArrivalAirport   string `gorm:"size:4;not null"`
-	RouteTimeHour    string `gorm:"size:2;not null"`
-	RouteTimeMinute  string `gorm:"size:2;not null"`
-	FuelTimeHour     string `gorm:"size:2;not null"`
-	FuelTimeMinute   string `gorm:"size:2;not null"`
-	AlternateAirport string `gorm:"size:4;not null"`
-	Remarks          string `gorm:"type:text;not null"`
-	Route            string `gorm:"type:text;not null"`
-	Locked           bool   `gorm:"default:0;not null"`
-	FromWeb          bool   `gorm:"default:0;not null"`
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID               uint      `gorm:"primarykey" json:"-"`
+	Cid              int       `gorm:"index;not null" json:"cid"`
+	Callsign         string    `gorm:"size:16;uniqueIndex;not null" json:"callsign"`
+	FlightType       string    `gorm:"size:4;not null" json:"flight_type"`
+	AircraftType     string    `gorm:"size:16;not null" json:"aircraft_type"`
+	Tas              int       `gorm:"not null" json:"tas"`
+	DepartureAirport string    `gorm:"size:4;not null" json:"departure_airport"`
+	DepartureTime    int       `gorm:"not null" json:"departure_time"`
+	AtcDepartureTime int       `gorm:"not null" json:"-"`
+	CruiseAltitude   string    `gorm:"size:8;not null" json:"cruise_altitude"`
+	ArrivalAirport   string    `gorm:"size:4;not null" json:"arrival_airport"`
+	RouteTimeHour    string    `gorm:"size:2;not null" json:"route_time_hour"`
+	RouteTimeMinute  string    `gorm:"size:2;not null" json:"route_time_minute"`
+	FuelTimeHour     string    `gorm:"size:2;not null" json:"fuel_time_hour"`
+	FuelTimeMinute   string    `gorm:"size:2;not null" json:"fuel_time_minute"`
+	AlternateAirport string    `gorm:"size:4;not null" json:"alternate_airport"`
+	Remarks          string    `gorm:"type:text;not null" json:"remarks"`
+	Route            string    `gorm:"type:text;not null" json:"route"`
+	Locked           bool      `gorm:"default:0;not null" json:"-"`
+	FromWeb          bool      `gorm:"default:0;not null" json:"-"`
+	CreatedAt        time.Time `json:"-"`
+	UpdatedAt        time.Time `json:"-"`
 }
 
 type History struct {
@@ -61,41 +61,41 @@ type History struct {
 }
 
 type Activity struct {
-	ID               uint            `gorm:"primarykey"`
-	Publisher        int             `gorm:"index;not null"`
-	Title            string          `gorm:"size:128;not null"`
-	ImageUrl         string          `gorm:"size:128;not null"`
-	ActiveTime       time.Time       `gorm:"not null"`
-	DepartureAirport string          `gorm:"size:4;not null"`
-	ArrivalAirport   string          `gorm:"size:4;not null"`
-	Route            string          `gorm:"size:128;not null"`
-	Distance         int             `gorm:"default:0;not null"`
-	Status           int             `gorm:"default:0;not null"`
-	NOTAMS           string          `gorm:"type:text;not null"`
-	Facilities       []ActivityATC   `gorm:"foreignKey:ActivityId;references:ID"`
-	Pilots           []ActivityPilot `gorm:"foreignKey:ActivityId;references:ID"`
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID               uint            `gorm:"primarykey" json:"id"`
+	Publisher        int             `gorm:"index;not null" json:"publisher"`
+	Title            string          `gorm:"size:128;not null" json:"title"`
+	ImageUrl         string          `gorm:"size:128;not null" json:"image_url"`
+	ActiveTime       time.Time       `gorm:"not null" json:"active_time"`
+	DepartureAirport string          `gorm:"size:4;not null" json:"departure_airport"`
+	ArrivalAirport   string          `gorm:"size:4;not null" json:"arrival_airport"`
+	Route            string          `gorm:"size:128;not null" json:"route"`
+	Distance         int             `gorm:"default:0;not null" json:"distance"`
+	Status           int             `gorm:"default:0;not null" json:"status"`
+	NOTAMS           string          `gorm:"type:text;not null" json:"NOTAMS"`
+	Facilities       []ActivityATC   `gorm:"foreignKey:ActivityId;references:ID" json:"facilities"`
+	Pilots           []ActivityPilot `gorm:"foreignKey:ActivityId;references:ID" json:"pilots"`
+	CreatedAt        time.Time       `json:"-"`
+	UpdatedAt        time.Time       `json:"-"`
 }
 
 type ActivityATC struct {
-	ID         uint   `gorm:"primarykey"`
-	ActivityId uint   `gorm:"index;not null"`
-	Cid        uint   `gorm:"index;not null"`
-	MinRating  int    `gorm:"default:2;not null"`
-	Callsign   string `gorm:"size:16;not null"`
-	Frequency  string `gorm:"size:4;not null"`
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID         uint      `gorm:"primarykey" json:"id"`
+	ActivityId uint      `gorm:"index;not null" json:"activity_id"`
+	Cid        uint      `gorm:"index;not null" json:"cid"`
+	MinRating  int       `gorm:"default:2;not null" json:"min_rating"`
+	Callsign   string    `gorm:"size:16;not null" json:"callsign"`
+	Frequency  string    `gorm:"size:4;not null" json:"frequency"`
+	CreatedAt  time.Time `json:"-"`
+	UpdatedAt  time.Time `json:"-"`
 }
 
 type ActivityPilot struct {
-	ID           uint   `gorm:"primarykey"`
-	ActivityId   uint   `gorm:"index;not null"`
-	Cid          int    `gorm:"index;not null"`
-	Callsign     string `gorm:"size:16;not null"`
-	AircraftType string `gorm:"size:8;not null"`
-	Status       int    `gorm:"default:0;not null"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID           uint      `gorm:"primarykey" json:"id"`
+	ActivityId   uint      `gorm:"index;not null" json:"activity_id"`
+	Cid          int       `gorm:"index;not null" json:"cid"`
+	Callsign     string    `gorm:"size:16;not null" json:"callsign"`
+	AircraftType string    `gorm:"size:8;not null" json:"aircraft_type"`
+	Status       int       `gorm:"default:0;not null" json:"status"`
+	CreatedAt    time.Time `json:"-"`
+	UpdatedAt    time.Time `json:"-"`
 }

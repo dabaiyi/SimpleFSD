@@ -30,8 +30,8 @@ var RatingFacilityMap = map[Rating]Facility{
 
 var PossibleClientCommands = [][]byte{[]byte(PilotPosition), []byte(AtcPosition), []byte(AtcSubVisPoint),
 	[]byte(Message), []byte(ClientQuery), []byte(ClientResponse), []byte(Plan), []byte(AtcEditPlan), []byte(RequestHandoff),
-	[]byte(AcceptHandoff), []byte(ProController), []byte(AddAtc), []byte(RemoveAtc), []byte(AddPilot), []byte(RemovePilot),
-	[]byte(KillClient)}
+	[]byte(AcceptHandoff), []byte(ProController), []byte(SquawkBox), []byte(AddAtc), []byte(RemoveAtc), []byte(AddPilot),
+	[]byte(RemovePilot), []byte(KillClient)}
 
 var CommandRequirements = map[ClientCommand]*CommandRequirement{
 	AddAtc:         {12, true},
@@ -48,4 +48,5 @@ var CommandRequirements = map[ClientCommand]*CommandRequirement{
 	RequestHandoff: {3, false},
 	AcceptHandoff:  {3, false},
 	ProController:  {3, false},
+	SquawkBox:      {2, false},
 }

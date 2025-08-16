@@ -403,6 +403,20 @@ func (c *ConnectionHandler) removeClient(_ []string, _ []byte) *Result {
 	return ResultSuccess()
 }
 
+func (c *ConnectionHandler) handleSquawkBox(data []string, rawLine []byte) *Result {
+	//# SB ZSHA_CTR CES7199 FSIPIR 0 ZZZ C172 3.73453 1.32984 174.00000 3.3028DC0.98CF9A41 L1P Cessna Skyhawk 172SP
+	if c.client == nil {
+		return ResultError(Syntax, false, "", fmt.Errorf("client not register"))
+	}
+	targetStation := data[1]
+	client, ok := clientManager.GetClient(targetStation)
+	if !ok {
+		return ResultError(SourceCallsignInvalid, false, c.client.Callsign(), fmt.Errorf("%s not exists", targetStation))
+	}
+	client.SendLine(rawLine)
+	return ResultSuccess()
+}
+
 func (c *ConnectionHandler) handleCommand(commandType ClientCommand, data []string, rawLine []byte) *Result {
 	var result = ResultSuccess()
 	if requirement, ok := CommandRequirements[commandType]; ok {
@@ -437,6 +451,8 @@ func (c *ConnectionHandler) handleCommand(commandType ClientCommand, data []stri
 		result = c.handleClientResponse(data, rawLine)
 	case RemoveAtc, RemovePilot:
 		c.removeClient(data, rawLine)
+	case SquawkBox:
+		result = c.handleSquawkBox(data, rawLine)
 	default:
 		result = ResultSuccess()
 	}

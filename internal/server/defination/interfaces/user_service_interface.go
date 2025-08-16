@@ -1,18 +1,10 @@
 // Package interfaces
 package interfaces
 
-import "github.com/labstack/echo/v4"
-
-type UserModel struct {
-	Username       string `json:"username"`
-	Email          string `json:"email"`
-	Cid            int    `json:"cid"`
-	QQ             int    `json:"qq"`
-	Rating         int    `json:"rating"`
-	TotalPilotTime int    `json:"total_pilot_time"`
-	TotalAtcTime   int    `json:"total_atc_time"`
-	Permission     int64  `json:"permission"`
-}
+import (
+	"github.com/half-nothing/fsd-server/internal/server/database"
+	"github.com/labstack/echo/v4"
+)
 
 type UserServiceInterface interface {
 	UserRegister(req *RequestUserRegister) *ApiResponse[ResponseUserRegister]
@@ -36,9 +28,9 @@ type RequestUserRegister struct {
 }
 
 type ResponseUserRegister struct {
-	Username   string `json:"username"`
-	Token      string `json:"token"`
-	FlushToken string `json:"flush_token"`
+	User       *database.User `json:"user"`
+	Token      string         `json:"token"`
+	FlushToken string         `json:"flush_token"`
 }
 
 type RequestUserLogin struct {
@@ -47,9 +39,9 @@ type RequestUserLogin struct {
 }
 
 type ResponseUserLogin struct {
-	Username   string `json:"username"`
-	Token      string `json:"token"`
-	FlushToken string `json:"flush_token"`
+	User       *database.User `json:"user"`
+	Token      string         `json:"token"`
+	FlushToken string         `json:"flush_token"`
 }
 
 type RequestUserAvailability struct {
@@ -64,7 +56,7 @@ type RequestUserCurrentProfile struct {
 	Uid uint
 }
 
-type ResponseUserCurrentProfile UserModel
+type ResponseUserCurrentProfile database.User
 
 type RequestUserEditCurrentProfile struct {
 	ID             uint   `json:"id"`
@@ -77,23 +69,13 @@ type RequestUserEditCurrentProfile struct {
 	NewPassword    string `json:"new_password"`
 }
 
-type ResponseUserEditCurrentProfile struct {
-	Username       string `json:"username"`
-	Email          string `json:"email"`
-	Cid            int    `json:"cid"`
-	QQ             int    `json:"qq"`
-	Rating         int    `json:"rating"`
-	TotalPilotTime int    `json:"total_pilot_time"`
-	TotalAtcTime   int    `json:"total_atc_time"`
-	Permission     int64  `json:"permission"`
-}
-
+type ResponseUserEditCurrentProfile database.User
 type RequestUserProfile struct {
 	JwtHeader
 	TargetUid uint `param:"uid"`
 }
 
-type ResponseUserProfile UserModel
+type ResponseUserProfile database.User
 
 type RequestUserList struct {
 	JwtHeader
@@ -102,10 +84,10 @@ type RequestUserList struct {
 }
 
 type ResponseUserList struct {
-	Items    []UserModel `json:"items"`
-	Page     int         `json:"page"`
-	PageSize int         `json:"page_size"`
-	Total    int64       `json:"total"`
+	Items    []*database.User `json:"items"`
+	Page     int              `json:"page"`
+	PageSize int              `json:"page_size"`
+	Total    int64            `json:"total"`
 }
 
 type RequestUserEditProfile struct {
@@ -114,7 +96,7 @@ type RequestUserEditProfile struct {
 	RequestUserEditCurrentProfile
 }
 
-type ResponseUserEditProfile UserModel
+type ResponseUserEditProfile database.User
 
 type RequestUserEditPermission struct {
 	JwtHeader
@@ -122,7 +104,7 @@ type RequestUserEditPermission struct {
 	Permissions echo.Map `json:"permissions"`
 }
 
-type ResponseUserEditPermission UserModel
+type ResponseUserEditPermission database.User
 
 type RequestUserEditRating struct {
 	JwtHeader
@@ -130,4 +112,4 @@ type RequestUserEditRating struct {
 	Rating    int  `json:"rating"`
 }
 
-type ResponseUserEditRating UserModel
+type ResponseUserEditRating database.User

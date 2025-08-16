@@ -77,7 +77,7 @@ func (userService *UserService) UserRegister(req *RequestUserRegister) *ApiRespo
 	token := NewClaims(user, false)
 	flushToken := NewClaims(user, true)
 	return NewApiResponse(&SuccessRegister, Unsatisfied, &ResponseUserRegister{
-		Username:   req.Username,
+		User:       user,
 		Token:      token.GenerateKey(),
 		FlushToken: flushToken.GenerateKey(),
 	})
@@ -105,7 +105,7 @@ func (userService *UserService) UserLogin(req *RequestUserLogin) *ApiResponse[Re
 		token := NewClaims(user, false)
 		flushToken := NewClaims(user, true)
 		return NewApiResponse(&SuccessLogin, Unsatisfied, &ResponseUserLogin{
-			Username:   user.Username,
+			User:       user,
 			Token:      token.GenerateKey(),
 			FlushToken: flushToken.GenerateKey(),
 		})
@@ -141,17 +141,7 @@ func (userService *UserService) GetCurrentProfile(req *RequestUserCurrentProfile
 	} else if err != nil {
 		return NewApiResponse[ResponseUserCurrentProfile](&ErrDatabaseFail, Unsatisfied, nil)
 	} else {
-		data := ResponseUserCurrentProfile{
-			Username:       user.Username,
-			Email:          user.Email,
-			Cid:            user.Cid,
-			QQ:             user.QQ,
-			Rating:         user.Rating,
-			TotalPilotTime: user.TotalPilotTime,
-			TotalAtcTime:   user.TotalAtcTime,
-			Permission:     user.Permission,
-		}
-		return NewApiResponse(&SuccessGetCurrentProfile, Unsatisfied, &data)
+		return NewApiResponse(&SuccessGetCurrentProfile, Unsatisfied, (*ResponseUserCurrentProfile)(user))
 	}
 }
 
@@ -263,16 +253,7 @@ func (userService *UserService) EditCurrentProfile(req *RequestUserEditCurrentPr
 	if err, user := userService.editUserProfile(req, false); err != nil {
 		return NewApiResponse[ResponseUserEditCurrentProfile](err, Unsatisfied, nil)
 	} else {
-		return NewApiResponse(&SuccessEditCurrentProfile, Unsatisfied, &ResponseUserEditCurrentProfile{
-			Username:       user.Username,
-			Email:          user.Email,
-			Cid:            user.Cid,
-			QQ:             user.QQ,
-			Rating:         user.Rating,
-			TotalPilotTime: user.TotalPilotTime,
-			TotalAtcTime:   user.TotalAtcTime,
-			Permission:     user.Permission,
-		})
+		return NewApiResponse(&SuccessEditCurrentProfile, Unsatisfied, (*ResponseUserEditCurrentProfile)(user))
 	}
 }
 
@@ -297,16 +278,7 @@ func (userService *UserService) GetUserProfile(req *RequestUserProfile) *ApiResp
 	if res != nil {
 		return res
 	}
-	return NewApiResponse(&SuccessGetProfile, Unsatisfied, &ResponseUserProfile{
-		Username:       user.Username,
-		Email:          user.Email,
-		Cid:            user.Cid,
-		QQ:             user.QQ,
-		Rating:         user.Rating,
-		TotalPilotTime: user.TotalPilotTime,
-		TotalAtcTime:   user.TotalAtcTime,
-		Permission:     user.Permission,
-	})
+	return NewApiResponse(&SuccessGetProfile, Unsatisfied, (*ResponseUserProfile)(user))
 }
 
 var (
@@ -326,17 +298,7 @@ func (userService *UserService) EditUserProfile(req *RequestUserEditProfile) *Ap
 	if err != nil {
 		return NewApiResponse[ResponseUserEditProfile](err, Unsatisfied, nil)
 	}
-	data := ResponseUserEditProfile{
-		Username:       user.Username,
-		Email:          user.Email,
-		Cid:            user.Cid,
-		QQ:             user.QQ,
-		Rating:         user.Rating,
-		TotalPilotTime: user.TotalPilotTime,
-		TotalAtcTime:   user.TotalAtcTime,
-		Permission:     user.Permission,
-	}
-	return NewApiResponse(&SuccessEditUserProfile, Unsatisfied, &data)
+	return NewApiResponse(&SuccessEditUserProfile, Unsatisfied, (*ResponseUserEditProfile)(user))
 }
 
 var (
@@ -358,25 +320,12 @@ func (userService *UserService) GetUserList(req *RequestUserList) *ApiResponse[R
 	if err != nil {
 		return NewApiResponse[ResponseUserList](&ErrDatabaseFail, Unsatisfied, nil)
 	}
-	data := ResponseUserList{
-		Items:    make([]UserModel, 0, req.PageSize),
+	return NewApiResponse(&SuccessGetUsers, Unsatisfied, &ResponseUserList{
+		Items:    users,
 		Page:     req.Page,
 		PageSize: req.PageSize,
 		Total:    total,
-	}
-	for _, user := range users {
-		data.Items = append(data.Items, UserModel{
-			Username:       user.Username,
-			Email:          user.Email,
-			Cid:            user.Cid,
-			QQ:             user.QQ,
-			Rating:         user.Rating,
-			TotalPilotTime: user.TotalPilotTime,
-			TotalAtcTime:   user.TotalAtcTime,
-			Permission:     user.Permission,
-		})
-	}
-	return NewApiResponse(&SuccessGetUsers, Unsatisfied, &data)
+	})
 }
 
 var (
@@ -425,16 +374,7 @@ func (userService *UserService) EditUserPermission(req *RequestUserEditPermissio
 		}
 	}
 
-	return NewApiResponse[ResponseUserEditPermission](&SuccessEditUserPermission, Unsatisfied, &ResponseUserEditPermission{
-		Username:       targetUser.Username,
-		Email:          targetUser.Email,
-		Cid:            targetUser.Cid,
-		QQ:             targetUser.QQ,
-		Rating:         targetUser.Rating,
-		TotalPilotTime: targetUser.TotalPilotTime,
-		TotalAtcTime:   targetUser.TotalAtcTime,
-		Permission:     targetUser.Permission,
-	})
+	return NewApiResponse(&SuccessEditUserPermission, Unsatisfied, (*ResponseUserEditPermission)(user))
 }
 
 var (
@@ -468,14 +408,5 @@ func (userService *UserService) EditUserRating(req *RequestUserEditRating) *ApiR
 		}
 	}
 
-	return NewApiResponse[ResponseUserEditRating](&SuccessEditUserRating, Unsatisfied, &ResponseUserEditRating{
-		Username:       targetUser.Username,
-		Email:          targetUser.Email,
-		Cid:            targetUser.Cid,
-		QQ:             targetUser.QQ,
-		Rating:         targetUser.Rating,
-		TotalPilotTime: targetUser.TotalPilotTime,
-		TotalAtcTime:   targetUser.TotalAtcTime,
-		Permission:     targetUser.Permission,
-	})
+	return NewApiResponse(&SuccessEditUserRating, Unsatisfied, (*ResponseUserEditRating)(user))
 }
