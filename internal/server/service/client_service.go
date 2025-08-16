@@ -38,8 +38,6 @@ func (clientService *ClientService) getOnlineClient() *OnlineClients {
 		},
 		Pilots:      make([]*OnlinePilot, 0),
 		Controllers: make([]*OnlineController, 0),
-		Facilities:  &fsd.Facilities,
-		Ratings:     &fsd.Ratings,
 	}
 
 	clientCopy := clientService.clientManager.GetClientSnapshot()
@@ -91,7 +89,7 @@ var SuccessGetOnlineClients = ApiStatus{StatusName: "GET_ONLINE_CLIENTS", Descri
 
 func (clientService *ClientService) GetOnlineClient() *ApiResponse[ResponseOnlineClient] {
 	return NewApiResponse(&SuccessGetOnlineClients, Unsatisfied, &ResponseOnlineClient{
-		OnlineClients: *clientService.onlineClient.GetValue(),
+		OnlineClients: clientService.onlineClient.GetValue(),
 	})
 }
 

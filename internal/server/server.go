@@ -142,9 +142,12 @@ func StartHttpServer() {
 	userService := service.NewUserService(emailService, config)
 	clientManager := packet.GetClientManager()
 	clientService := service.NewClientService(config, clientManager, emailService)
+	serverService := service.NewServerService(config)
+
 	userController := controller.NewUserHandler(userService)
 	emailController := controller.NewEmailController(emailService)
 	clientController := controller.NewClientController(clientService)
+	serverController := controller.NewServerController(serverService)
 
 	apiGroup := e.Group("/api")
 	apiGroup.POST("/sessions", userController.UserLoginHandler)
@@ -165,6 +168,9 @@ func StartHttpServer() {
 	clientGroup.GET("", clientController.GetOnlineClients)
 	clientGroup.POST("/:callsign/message", clientController.SendMessageToClient, jwtMiddleware)
 	clientGroup.DELETE("/:callsign", clientController.KillClient, jwtMiddleware)
+
+	serverGroup := apiGroup.Group("/server")
+	serverGroup.GET("/config", serverController.GetServerConfig)
 
 	c.GetCleaner().Add(NewHttpServerShutdownCallback(e))
 

@@ -37,12 +37,14 @@ var Facilities = []FacilityModel{
 	{7, "FSS", "Flight Service Station"},
 }
 
+var facilitiesIndex = map[Facility]int{Pilot: 0, OBS: 1, DEL: 2, GND: 3, TWR: 4, APP: 5, CTR: 6, FSS: 7}
+
 func (f Facility) String() string {
 	return Facilities[f].ShortName
 }
 
 func (f Facility) Index() int {
-	return int(f)
+	return facilitiesIndex[f]
 }
 
 func (f Facility) CheckFacility(facility Facility) bool {

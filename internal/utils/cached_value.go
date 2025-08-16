@@ -15,10 +15,17 @@ type CachedValue[T any] struct {
 }
 
 func NewCachedValue[T any](cachedTime time.Duration, getter func() *T) *CachedValue[T] {
-	return &CachedValue[T]{time.Now(), nil, sync.RWMutex{}, cachedTime, getter}
+	value := &CachedValue[T]{time.Now(), nil, sync.RWMutex{}, cachedTime, getter}
+	if cachedTime <= 0 {
+		value.cachedData = getter()
+	}
+	return value
 }
 
 func (cachedValue *CachedValue[T]) GetValue() *T {
+	if cachedValue.cachedTime <= 0 {
+		return cachedValue.cachedData
+	}
 	cachedValue.mu.RLock()
 	if cachedValue.cachedData != nil && time.Since(cachedValue.generateTime) <= cachedValue.cachedTime {
 		defer cachedValue.mu.RUnlock()

@@ -1,10 +1,6 @@
 // Package interfaces
 package interfaces
 
-import (
-	. "github.com/half-nothing/fsd-server/internal/server/defination/fsd"
-)
-
 type ClientServiceInterface interface {
 	GetOnlineClient() *ApiResponse[ResponseOnlineClient]
 	SendMessageToClient(req *RequestSendMessageToClient) *ApiResponse[ResponseSendMessageToClient]
@@ -47,12 +43,10 @@ type OnlineClients struct {
 	General     OnlineGeneral       `json:"general"`
 	Pilots      []*OnlinePilot      `json:"pilots"`
 	Controllers []*OnlineController `json:"controllers"`
-	Facilities  *[]FacilityModel    `json:"facilities"`
-	Ratings     *[]RatingModel      `json:"ratings"`
 }
 
 type ResponseOnlineClient struct {
-	OnlineClients
+	*OnlineClients
 }
 
 type RequestSendMessageToClient struct {
