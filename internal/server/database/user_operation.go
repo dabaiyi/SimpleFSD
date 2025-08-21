@@ -3,70 +3,123 @@ package database
 import (
 	"context"
 	"errors"
+	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/defination"
+	. "github.com/half-nothing/fsd-server/internal/server/defination/database"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
-var (
-	ErrUserNotFound    = errors.New("user does not exist")
-	ErrIdentifierTaken = errors.New("user identifiers have been used")
-	ErrPasswordEncode  = errors.New("password encode error")
-	ErrIdentifierCheck = errors.New("identifier check error")
-	ErrOldPassword     = errors.New("old password error")
-)
-
-type UserId interface {
-	GetUser() (*User, error)
+type UserOperation struct {
+	config *c.OtherConfig
+	db     *gorm.DB
 }
 
-type IntUserId int
-type StringUserId string
+func NewUserOperation(config *c.OtherConfig, db *gorm.DB) *UserOperation {
+	return &UserOperation{config: config, db: db}
+}
 
-func (id IntUserId) GetUser() (*User, error) {
+func (userOperation *UserOperation) GetUserByUid(uid uint) (*User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	user := User{}
-	err := database.WithContext(ctx).
-		Where("cid = ?", id).
-		First(&user).Error
-
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrUserNotFound
-	}
-	return &user, nil
-}
-
-func (id StringUserId) GetUser() (*User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
-	user := User{}
-	err := database.WithContext(ctx).
-		Where("username = ? OR email = ?", id, id).
-		First(&user).Error
-
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrUserNotFound
-	}
-	return &user, nil
-}
-
-func GetUserById(uid uint) (*User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
-	user := User{}
-	err := database.WithContext(ctx).
+	err := userOperation.db.WithContext(ctx).
 		Where("id = ?", uid).
 		First(&user).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrUserNotFound
 	}
+	if err != nil {
+		return nil, err
+	}
 	return &user, nil
 }
 
-func NewUser(username string, email string, cid int, password string) (*User, error) {
-	encodePassword, err := bcrypt.GenerateFromPassword([]byte(password), config.Server.General.BcryptCost)
+func (userOperation *UserOperation) GetUserByCid(cid uint) (*User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	user := User{}
+	err := userOperation.db.WithContext(ctx).
+		Where("cid = ?", cid).
+		First(&user).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+
+}
+
+func (userOperation *UserOperation) GetUserByUsername(username string) (*User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	user := User{}
+	err := userOperation.db.WithContext(ctx).
+		Where("username = ?", username).
+		First(&user).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (userOperation *UserOperation) GetUserByEmail(email string) (*User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	user := User{}
+	err := userOperation.db.WithContext(ctx).
+		Where("email = ?", email).
+		First(&user).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (userOperation *UserOperation) GetUserByUsernameOrEmail(ident string) (*User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	user := User{}
+	err := userOperation.db.WithContext(ctx).
+		Where("username = ? OR email = ?", ident, ident).
+		First(&user).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (userOperation *UserOperation) GetUsers(page, pageSize int) ([]*User, int64, error) {
+	var total int64
+	users := make([]*User, 0, pageSize)
+
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+
+	userOperation.db.WithContext(ctx).Model(&User{}).Select("id").Count(&total)
+	err := userOperation.db.WithContext(ctx).Offset((page - 1) * pageSize).Limit(pageSize).Find(&users).Error
+
+	return users, total, err
+}
+
+func (userOperation *UserOperation) NewUser(username string, email string, cid int, password string) (*User, error) {
+	encodePassword, err := bcrypt.GenerateFromPassword([]byte(password), userOperation.config.BcryptCost)
 	if err != nil {
 		return nil, ErrPasswordEncode
 	}
@@ -83,27 +136,61 @@ func NewUser(username string, email string, cid int, password string) (*User, er
 	}, nil
 }
 
-func GetUsers(page, pageSize int) ([]*User, int64, error) {
-	var total int64
-	users := make([]*User, 0, pageSize)
+func (userOperation *UserOperation) AddUser(user *User) error {
+	return userOperation.db.Transaction(func(tx *gorm.DB) error {
+		taken, err := userOperation.IsUserIdentifierTaken(tx, user.Cid, user.Username, user.Email)
+		if err != nil {
+			return ErrIdentifierCheck
+		}
 
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
+		if taken {
+			return ErrIdentifierTaken
+		}
 
-	database.WithContext(ctx).Model(&User{}).Select("id").Count(&total)
-	err := database.WithContext(ctx).Offset((page - 1) * pageSize).Limit(pageSize).Find(&users).Error
-
-	return users, total, err
+		ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+		defer cancel()
+		return tx.WithContext(ctx).Create(user).Error
+	})
 }
 
-func (user *User) UpdateInfo(info map[string]interface{}) error {
+func (userOperation *UserOperation) UpdateUserAtcTime(user *User, seconds int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	return database.WithContext(ctx).Model(user).Updates(info).Error
+	return userOperation.db.WithContext(ctx).Model(user).Update("total_atc_time", gorm.Expr("total_atc_time + ?", seconds)).Error
 }
 
-func (user *User) UpdatePassword(originalPassword string, newPassword string) ([]byte, error) {
-	if !user.VerifyPassword(originalPassword) {
+func (userOperation *UserOperation) UpdateUserPilotTime(user *User, seconds int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return userOperation.db.WithContext(ctx).Model(user).Update("total_pilot_time", gorm.Expr("total_pilot_time + ?", seconds)).Error
+}
+
+func (userOperation *UserOperation) UpdateUserRating(user *User, rating int) error {
+	user.Rating = rating
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return userOperation.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.Model(user).Update("rating", rating).Error
+	})
+}
+
+func (userOperation *UserOperation) UpdatePermission(user *User, permission defination.Permission) error {
+	user.Permission = int64(permission)
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return userOperation.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.Model(user).Update("permission", int64(permission)).Error
+	})
+}
+
+func (userOperation *UserOperation) UpdateUserInfo(user *User, info map[string]interface{}) error {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return userOperation.db.WithContext(ctx).Model(user).Updates(info).Error
+}
+
+func (userOperation *UserOperation) UpdateUserPassword(user *User, originalPassword, newPassword string) ([]byte, error) {
+	if !userOperation.VerifyUserPassword(user, originalPassword) {
 		return nil, ErrOldPassword
 	}
 	encodePassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), config.Server.General.BcryptCost)
@@ -114,28 +201,20 @@ func (user *User) UpdatePassword(originalPassword string, newPassword string) ([
 	return encodePassword, nil
 }
 
-func (user *User) addUser(tx *gorm.DB) error {
+func (userOperation *UserOperation) SaveUser(user *User) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	return tx.WithContext(ctx).Create(user).Error
+
+	err := userOperation.db.WithContext(ctx).Save(user).Error
+	return err
 }
 
-func (user *User) AddUser() error {
-	return database.Transaction(func(tx *gorm.DB) error {
-		taken, err := isUserIdentifierTaken(tx, user.Cid, user.Username, user.Email)
-		if err != nil {
-			return ErrIdentifierCheck
-		}
-
-		if taken {
-			return ErrIdentifierTaken
-		}
-
-		return user.addUser(tx)
-	})
+func (userOperation *UserOperation) VerifyUserPassword(user *User, password string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	return err == nil
 }
 
-func isUserIdentifierTaken(tx *gorm.DB, cid int, username, email string) (bool, error) {
+func (userOperation *UserOperation) IsUserIdentifierTaken(tx *gorm.DB, cid int, username, email string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
@@ -150,52 +229,4 @@ func isUserIdentifierTaken(tx *gorm.DB, cid int, username, email string) (bool, 
 	}
 
 	return count > 0, nil
-}
-
-// IsUserIdentifierTaken 检查用户唯一标识是否已存在（cid/username/email任一重复即返回true）
-func IsUserIdentifierTaken(cid int, username, email string) (bool, error) {
-	return isUserIdentifierTaken(database, cid, username, email)
-}
-
-func (user *User) AddAtcTime(seconds int) error {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
-	return database.WithContext(ctx).Model(user).Update("total_atc_time", gorm.Expr("total_atc_time + ?", seconds)).Error
-}
-
-func (user *User) AddPilotTime(seconds int) error {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
-	return database.WithContext(ctx).Model(user).Update("total_pilot_time", gorm.Expr("total_pilot_time + ?", seconds)).Error
-}
-
-func (user *User) Save() error {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
-
-	err := database.WithContext(ctx).Save(user).Error
-	return err
-}
-
-func (user *User) UpdateRating(rating int) error {
-	user.Rating = rating
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
-	return database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return tx.Model(user).Update("rating", rating).Error
-	})
-}
-
-func (user *User) UpdatePermission(permission defination.Permission) error {
-	user.Permission = int64(permission)
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
-	return database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return tx.Model(user).Update("permission", int64(permission)).Error
-	})
-}
-
-func (user *User) VerifyPassword(password string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
-	return err == nil
 }

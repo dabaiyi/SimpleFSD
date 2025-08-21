@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	database2 "github.com/half-nothing/fsd-server/internal/server/defination/database"
 	"github.com/half-nothing/fsd-server/internal/utils"
 	"gorm.io/gorm"
 )
@@ -16,13 +17,13 @@ var (
 	ErrFlightPlanLocked       = errors.New("flight plan locked")
 )
 
-func GetFlightPlan(cid int) (*FlightPlan, error) {
+func GetFlightPlan(cid int) (*database2.FlightPlan, error) {
 	if config.Server.General.SimulatorServer {
 		return nil, ErrSimulatorServer
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	flightPlan := FlightPlan{}
+	flightPlan := database2.FlightPlan{}
 	var err error
 	err = database.WithContext(ctx).Where("cid = ?", cid).First(&flightPlan).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -33,14 +34,14 @@ func GetFlightPlan(cid int) (*FlightPlan, error) {
 	return &flightPlan, nil
 }
 
-func UpsertFlightPlan(user *User, callsign string, flightPlanData []string) (*FlightPlan, error) {
+func UpsertFlightPlan(user *database2.User, callsign string, flightPlanData []string) (*database2.FlightPlan, error) {
 	if len(flightPlanData) < 17 {
 		return nil, ErrFlightPlanDataTooShort
 	}
 	// 再次检查一遍防止重复创建
 	flightPlan, err := GetFlightPlan(user.Cid)
 	if err != nil {
-		flightPlan = &FlightPlan{
+		flightPlan = &database2.FlightPlan{
 			Cid:      user.Cid,
 			Callsign: callsign,
 			Locked:   false,
@@ -65,7 +66,7 @@ func UpsertFlightPlan(user *User, callsign string, flightPlanData []string) (*Fl
 	return flightPlan, err
 }
 
-func (flightPlan *FlightPlan) updateFlightPlanData(flightPlanData []string) {
+func (flightPlan *database2.FlightPlan) updateFlightPlanData(flightPlanData []string) {
 	flightPlan.FlightType = flightPlanData[2]
 	flightPlan.AircraftType = flightPlanData[3]
 	flightPlan.Tas = utils.StrToInt(flightPlanData[4], 100)
@@ -83,7 +84,7 @@ func (flightPlan *FlightPlan) updateFlightPlanData(flightPlanData []string) {
 	flightPlan.Route = flightPlanData[16]
 }
 
-func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string, atcEdit bool) error {
+func (flightPlan *database2.FlightPlan) UpdateFlightPlan(flightPlanData []string, atcEdit bool) error {
 	if len(flightPlanData) < 17 {
 		return ErrFlightPlanDataTooShort
 	}
@@ -103,7 +104,7 @@ func (flightPlan *FlightPlan) UpdateFlightPlan(flightPlanData []string, atcEdit 
 // 虽然理论上这个函数只能由ATC调用
 // 但鬼知道会不会有用户闲的蛋疼手动给服务器发消息
 // 所以还是多验证一点吧）
-func (flightPlan *FlightPlan) UpdateCruiseAltitude(cruiseAltitude string, atcEdit bool) error {
+func (flightPlan *database2.FlightPlan) UpdateCruiseAltitude(cruiseAltitude string, atcEdit bool) error {
 	flightPlan.CruiseAltitude = cruiseAltitude
 	if config.Server.General.SimulatorServer {
 		return nil
@@ -127,7 +128,7 @@ func (flightPlan *FlightPlan) UpdateCruiseAltitude(cruiseAltitude string, atcEdi
 	return nil
 }
 
-func (flightPlan *FlightPlan) ToString(receiver string) string {
+func (flightPlan *database2.FlightPlan) ToString(receiver string) string {
 	return fmt.Sprintf("$FP%s:%s:%s:%s:%d:%s:%d:%d:%s:%s:%s:%s:%s:%s:%s:%s:%s\r\n",
 		flightPlan.Callsign, receiver, flightPlan.FlightType, flightPlan.AircraftType, flightPlan.Tas,
 		flightPlan.DepartureAirport, flightPlan.DepartureTime, flightPlan.AtcDepartureTime, flightPlan.CruiseAltitude,

@@ -3,11 +3,12 @@ package database
 
 import (
 	"context"
+	database2 "github.com/half-nothing/fsd-server/internal/server/defination/database"
 	"time"
 )
 
-func NewHistory(cid int, callsign string, isAtc bool) *History {
-	return &History{
+func NewHistory(cid int, callsign string, isAtc bool) *database2.History {
+	return &database2.History{
 		Cid:        cid,
 		Callsign:   callsign,
 		StartTime:  time.Now(),
@@ -17,7 +18,7 @@ func NewHistory(cid int, callsign string, isAtc bool) *History {
 	}
 }
 
-func (h *History) Save() error {
+func (h *database2.History) Save() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
@@ -25,7 +26,7 @@ func (h *History) Save() error {
 	return err
 }
 
-func (h *History) End() error {
+func (h *database2.History) End() error {
 	h.EndTime = time.Now()
 	h.OnlineTime = int(h.EndTime.Sub(h.StartTime).Seconds())
 	return h.Save()

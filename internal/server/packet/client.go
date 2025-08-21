@@ -6,6 +6,7 @@ import (
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
+	database2 "github.com/half-nothing/fsd-server/internal/server/defination/database"
 	. "github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	"github.com/half-nothing/fsd-server/internal/utils"
 	"slices"
@@ -19,7 +20,7 @@ type Client struct {
 	callsign       string
 	rating         Rating
 	facility       Facility
-	user           *database.User
+	user           *database2.User
 	protocol       int
 	realName       string
 	socket         ConnectionHandlerInterface
@@ -31,9 +32,9 @@ type Client struct {
 	frequency      int
 	pbh            uint32
 	visualRange    float64
-	flightPlan     *database.FlightPlan
+	flightPlan     *database2.FlightPlan
 	atisInfo       []string
-	history        *database.History
+	history        *database2.History
 	config         *c.Config
 	clientManager  ClientManagerInterface
 	disconnect     atomic.Bool
@@ -44,7 +45,7 @@ type Client struct {
 
 func (cm *ClientManager) NewClient(callsign string, rating Rating, protocol int, realName string, socket ConnectionHandlerInterface, isAtc bool) ClientInterface {
 	socket.SetCallsign(callsign)
-	var flightPlan *database.FlightPlan = nil
+	var flightPlan *database2.FlightPlan = nil
 	if !isAtc && !cm.config.Server.General.SimulatorServer {
 		var err error
 		flightPlan, err = database.GetFlightPlan(socket.User().Cid)
@@ -339,19 +340,19 @@ func (client *Client) Position() [4]Position { return client.position }
 
 func (client *Client) VisualRange() float64 { return client.visualRange }
 
-func (client *Client) SetUser(user *database.User) { client.user = user }
+func (client *Client) SetUser(user *database2.User) { client.user = user }
 
 func (client *Client) SetSimType(simType int) { client.simType = simType }
 
-func (client *Client) FlightPlan() *database.FlightPlan { return client.flightPlan }
+func (client *Client) FlightPlan() *database2.FlightPlan { return client.flightPlan }
 
-func (client *Client) User() *database.User { return client.user }
+func (client *Client) User() *database2.User { return client.user }
 
 func (client *Client) Frequency() int { return client.frequency }
 
 func (client *Client) AtisInfo() []string { return client.atisInfo }
 
-func (client *Client) History() *database.History { return client.history }
+func (client *Client) History() *database2.History { return client.history }
 
 func (client *Client) Transponder() string { return client.transponder }
 

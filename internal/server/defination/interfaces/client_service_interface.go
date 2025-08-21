@@ -1,7 +1,9 @@
 // Package interfaces
 package interfaces
 
-import "github.com/half-nothing/fsd-server/internal/server/database"
+import (
+	"github.com/half-nothing/fsd-server/internal/server/defination/database"
+)
 
 type ClientServiceInterface interface {
 	GetOnlineClient() *OnlineClients

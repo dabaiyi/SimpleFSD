@@ -5,6 +5,7 @@ import (
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
 	. "github.com/half-nothing/fsd-server/internal/server/defination"
+	database2 "github.com/half-nothing/fsd-server/internal/server/defination/database"
 	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	"time"
 )
@@ -36,7 +37,7 @@ func (activityService *ActivityService) GetActivityInfo(req *RequestActivityInfo
 	if req.ActivityId <= 0 {
 		return NewApiResponse[ResponseActivityInfo](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	activity, res := CallDBFuncAndCheckError[database.Activity, ResponseActivityInfo](func() (*database.Activity, error) {
+	activity, res := CallDBFuncAndCheckError[database2.Activity, ResponseActivityInfo](func() (*database2.Activity, error) {
 		return database.GetActivityById(req.ActivityId)
 	})
 	if res != nil {
@@ -65,8 +66,13 @@ func (activityService *ActivityService) AddActivity(req *RequestAddActivity) *Ap
 }
 
 func (activityService *ActivityService) DeleteActivity(req *RequestDeleteActivity) *ApiResponse[ResponseDeleteActivity] {
-	//TODO implement me
-	panic("implement me")
+	if req.Permission <= 0 {
+		return NewApiResponse[ResponseDeleteActivity](&ErrNoPermission, Unsatisfied, nil)
+	}
+	permission := Permission(req.Permission)
+	if !permission.HasPermission(ActivityDelete) {
+		return NewApiResponse[ResponseDeleteActivity](&ErrNoPermission, Unsatisfied, nil)
+	}
 }
 
 func (activityService *ActivityService) EditActivity(req *RequestEditActivity) *ApiResponse[ResponseEditActivity] {

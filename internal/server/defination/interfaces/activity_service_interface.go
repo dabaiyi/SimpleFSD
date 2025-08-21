@@ -2,7 +2,7 @@
 package interfaces
 
 import (
-	"github.com/half-nothing/fsd-server/internal/server/database"
+	"github.com/half-nothing/fsd-server/internal/server/defination/database"
 )
 
 type ActivityModel struct {
@@ -56,8 +56,13 @@ type ResponseAddActivity struct {
 	*database.Activity
 }
 
-type RequestDeleteActivity struct{}
-type ResponseDeleteActivity struct{}
+type RequestDeleteActivity struct {
+	JwtHeader
+	ActivityId uint `param:"id"`
+}
+
+type ResponseDeleteActivity bool
+
 type RequestEditActivity struct{}
 type ResponseEditActivity struct{}
 type RequestControllerJoin struct{}

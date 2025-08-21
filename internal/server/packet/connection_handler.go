@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	"github.com/half-nothing/fsd-server/internal/server/database"
+	"github.com/half-nothing/fsd-server/internal/server/defination/database"
 	. "github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	"net"
 	"sync/atomic"

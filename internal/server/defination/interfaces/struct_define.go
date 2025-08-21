@@ -7,6 +7,7 @@ import (
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
 	"github.com/half-nothing/fsd-server/internal/server/defination"
+	database2 "github.com/half-nothing/fsd-server/internal/server/defination/database"
 	"github.com/labstack/echo/v4"
 	"time"
 )
@@ -57,7 +58,7 @@ type JwtHeader struct {
 	Permission int64
 }
 
-func NewClaims(config *c.JWTConfig, user *database.User, flushToken bool) *Claims {
+func NewClaims(config *c.JWTConfig, user *database2.User, flushToken bool) *Claims {
 	expiredDuration := config.ExpiresDuration
 	if flushToken {
 		expiredDuration += config.RefreshDuration
@@ -138,9 +139,9 @@ func CallDBFuncAndCheckError[R any, T any](fc func() (*R, error)) (*R, *ApiRespo
 	}
 }
 
-func GetUsersAndCheckPermission[T any](uid, targetUid uint, perm defination.Permission) (*database.User, *database.User, *ApiResponse[T]) {
+func GetUsersAndCheckPermission[T any](uid, targetUid uint, perm defination.Permission) (*database2.User, *database2.User, *ApiResponse[T]) {
 	// 敏感操作获取实时数据
-	user, res := CallDBFuncAndCheckError[database.User, T](func() (*database.User, error) { return database.GetUserById(uid) })
+	user, res := CallDBFuncAndCheckError[database2.User, T](func() (*database2.User, error) { return database.GetUserById(uid) })
 	if res != nil {
 		return nil, nil, res
 	}
@@ -148,7 +149,7 @@ func GetUsersAndCheckPermission[T any](uid, targetUid uint, perm defination.Perm
 	if !permission.HasPermission(perm) {
 		return nil, nil, NewApiResponse[T](&ErrNoPermission, Unsatisfied, nil)
 	}
-	targetUser, res := CallDBFuncAndCheckError[database.User, T](func() (*database.User, error) { return database.GetUserById(targetUid) })
+	targetUser, res := CallDBFuncAndCheckError[database2.User, T](func() (*database2.User, error) { return database.GetUserById(targetUid) })
 	if res != nil {
 		return nil, nil, res
 	}

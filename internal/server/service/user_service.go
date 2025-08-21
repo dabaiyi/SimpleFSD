@@ -6,6 +6,7 @@ import (
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
 	. "github.com/half-nothing/fsd-server/internal/server/defination"
+	database2 "github.com/half-nothing/fsd-server/internal/server/defination/database"
 	"github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	"github.com/half-nothing/fsd-server/internal/utils"
@@ -95,7 +96,7 @@ func (userService *UserService) UserLogin(req *RequestUserLogin) *ApiResponse[Re
 	}
 	userId := database.StringUserId(req.Username)
 
-	user, res := CallDBFuncAndCheckError[database.User, ResponseUserLogin](func() (*database.User, error) {
+	user, res := CallDBFuncAndCheckError[database2.User, ResponseUserLogin](func() (*database2.User, error) {
 		return userId.GetUser()
 	})
 	if res != nil {
@@ -161,7 +162,7 @@ func checkQQ(qq int) *ApiStatus {
 	return &ErrQQInvalid
 }
 
-func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfile, skipEmailVerify bool) (*ApiStatus, *database.User) {
+func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfile, skipEmailVerify bool) (*ApiStatus, *database2.User) {
 	if req.Username == "" && req.Email == "" && req.QQ <= 0 && req.OriginPassword == "" && req.NewPassword == "" {
 		return &ErrIllegalParam, nil
 	}
@@ -273,7 +274,7 @@ func (userService *UserService) GetUserProfile(req *RequestUserProfile) *ApiResp
 	if !permission.HasPermission(UserGetProfile) {
 		return NewApiResponse[ResponseUserProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
-	user, res := CallDBFuncAndCheckError[database.User, ResponseUserProfile](func() (*database.User, error) {
+	user, res := CallDBFuncAndCheckError[database2.User, ResponseUserProfile](func() (*database2.User, error) {
 		return database.GetUserById(req.TargetUid)
 	})
 	if res != nil {

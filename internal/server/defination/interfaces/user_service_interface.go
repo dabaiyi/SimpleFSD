@@ -2,7 +2,7 @@
 package interfaces
 
 import (
-	"github.com/half-nothing/fsd-server/internal/server/database"
+	"github.com/half-nothing/fsd-server/internal/server/defination/database"
 	"github.com/labstack/echo/v4"
 )
 

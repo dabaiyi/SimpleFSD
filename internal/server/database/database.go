@@ -4,6 +4,7 @@ import (
 	"context"
 	. "fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
+	database2 "github.com/half-nothing/fsd-server/internal/server/defination/database"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"time"
@@ -55,7 +56,7 @@ func ConnectDatabase(config *c.Config) error {
 	}
 	database = db
 
-	if err = db.Migrator().AutoMigrate(&User{}, &FlightPlan{}, &History{}, &Activity{}, &ActivityATC{}, &ActivityPilot{}, &ActivityFacility{}); err != nil {
+	if err = db.Migrator().AutoMigrate(&database2.User{}, &database2.FlightPlan{}, &database2.History{}, &database2.Activity{}, &database2.ActivityATC{}, &database2.ActivityPilot{}, &database2.ActivityFacility{}); err != nil {
 		return Errorf("error occured while migrating database: %v", err)
 	}
 

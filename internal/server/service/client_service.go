@@ -6,6 +6,7 @@ import (
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
 	. "github.com/half-nothing/fsd-server/internal/server/defination"
+	database2 "github.com/half-nothing/fsd-server/internal/server/defination/database"
 	"github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	"github.com/half-nothing/fsd-server/internal/utils"
@@ -121,7 +122,7 @@ func (clientService *ClientService) KillClient(req *RequestKillClient) *ApiRespo
 	if req.Uid <= 0 || req.TargetCallsign == "" {
 		return NewApiResponse[ResponseKillClient](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	user, res := CallDBFuncAndCheckError[database.User, ResponseKillClient](func() (*database.User, error) { return database.GetUserById(req.Uid) })
+	user, res := CallDBFuncAndCheckError[database2.User, ResponseKillClient](func() (*database2.User, error) { return database.GetUserById(req.Uid) })
 	if res != nil {
 		return res
 	}

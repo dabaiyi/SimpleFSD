@@ -1,7 +1,9 @@
 // Package fsd
 package fsd
 
-import "github.com/half-nothing/fsd-server/internal/server/database"
+import (
+	"github.com/half-nothing/fsd-server/internal/server/defination/database"
+)
 
 type ClientInterface interface {
 	Disconnected() bool

@@ -2,7 +2,7 @@
 package fsd
 
 import (
-	"github.com/half-nothing/fsd-server/internal/server/database"
+	"github.com/half-nothing/fsd-server/internal/server/defination/database"
 	"net"
 )
 

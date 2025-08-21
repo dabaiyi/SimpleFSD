@@ -4,6 +4,7 @@ package database
 import (
 	"context"
 	"fmt"
+	database2 "github.com/half-nothing/fsd-server/internal/server/defination/database"
 	"gorm.io/gorm"
 	"time"
 )
@@ -25,9 +26,9 @@ const (
 	Landing                              // 已落地
 )
 
-func (user *User) NewActivity(title string, imageUrl string, activeTime time.Time, dep string,
-	arr string, route string, distance int, notams string) *Activity {
-	return &Activity{
+func (user *database2.User) NewActivity(title string, imageUrl string, activeTime time.Time, dep string,
+	arr string, route string, distance int, notams string) *database2.Activity {
+	return &database2.Activity{
 		Publisher:        user.Cid,
 		Title:            title,
 		ImageUrl:         imageUrl,
@@ -41,8 +42,8 @@ func (user *User) NewActivity(title string, imageUrl string, activeTime time.Tim
 	}
 }
 
-func (ac *Activity) NewActivityFacility(rating int, callsign string, frequency float64) *ActivityFacility {
-	return &ActivityFacility{
+func (ac *database2.Activity) NewActivityFacility(rating int, callsign string, frequency float64) *database2.ActivityFacility {
+	return &database2.ActivityFacility{
 		ActivityId: ac.ID,
 		MinRating:  rating,
 		Callsign:   callsign,
@@ -50,16 +51,16 @@ func (ac *Activity) NewActivityFacility(rating int, callsign string, frequency f
 	}
 }
 
-func (ac *Activity) NewActivityAtc(facility *ActivityFacility) *ActivityATC {
-	return &ActivityATC{
+func (ac *database2.Activity) NewActivityAtc(facility *database2.ActivityFacility) *database2.ActivityATC {
+	return &database2.ActivityATC{
 		ActivityId: ac.ID,
 		FacilityId: facility.ID,
 		Cid:        0,
 	}
 }
 
-func (ac *Activity) NewActivityPilot(user *User, callsign string, aircraftType string) *ActivityPilot {
-	return &ActivityPilot{
+func (ac *database2.Activity) NewActivityPilot(user *database2.User, callsign string, aircraftType string) *database2.ActivityPilot {
+	return &database2.ActivityPilot{
 		ActivityId:   ac.ID,
 		Cid:          user.Cid,
 		Callsign:     callsign,
@@ -68,8 +69,8 @@ func (ac *Activity) NewActivityPilot(user *User, callsign string, aircraftType s
 	}
 }
 
-func GetActivities(startDay, endDay time.Time) ([]*Activity, error) {
-	activities := make([]*Activity, 0)
+func GetActivities(startDay, endDay time.Time) ([]*database2.Activity, error) {
+	activities := make([]*database2.Activity, 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
@@ -79,8 +80,8 @@ func GetActivities(startDay, endDay time.Time) ([]*Activity, error) {
 	return activities, err
 }
 
-func GetActivityById(id uint) (*Activity, error) {
-	activity := &Activity{}
+func GetActivityById(id uint) (*database2.Activity, error) {
+	activity := &database2.Activity{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
@@ -96,7 +97,7 @@ func GetActivityById(id uint) (*Activity, error) {
 	return activity, err
 }
 
-func (ac *Activity) Save() error {
+func (ac *database2.Activity) Save() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
@@ -105,20 +106,20 @@ func (ac *Activity) Save() error {
 	})
 }
 
-func (ac *Activity) Delete() error {
+func (ac *database2.Activity) Delete() error {
 	return database.Transaction(func(tx *gorm.DB) error {
 		ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 		defer cancel()
 
 		if err := tx.WithContext(ctx).
 			Where("activity_id = ?", ac.ID).
-			Delete(&ActivityPilot{}).Error; err != nil {
+			Delete(&database2.ActivityPilot{}).Error; err != nil {
 			return fmt.Errorf("fail to delete activity pilots: %w", err)
 		}
 
 		if err := tx.WithContext(ctx).
 			Where("activity_id = ?", ac.ID).
-			Delete(&ActivityATC{}).Error; err != nil {
+			Delete(&database2.ActivityATC{}).Error; err != nil {
 			return fmt.Errorf("fail to delete activity atcs: %w", err)
 		}
 
@@ -130,29 +131,29 @@ func (ac *Activity) Delete() error {
 	})
 }
 
-func (ac *Activity) GetPilots() ([]ActivityPilot, error) {
+func (ac *database2.Activity) GetPilots() ([]database2.ActivityPilot, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	var pilots []ActivityPilot
+	var pilots []database2.ActivityPilot
 	err := database.WithContext(ctx).
 		Where("activity_id = ?", ac.ID).
 		Find(&pilots).Error
 	return pilots, err
 }
 
-func (ac *Activity) GetATCs() ([]ActivityATC, error) {
+func (ac *database2.Activity) GetATCs() ([]database2.ActivityATC, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	var atcs []ActivityATC
+	var atcs []database2.ActivityATC
 	err := database.WithContext(ctx).
 		Where("activity_id = ?", ac.ID).
 		Find(&atcs).Error
 	return atcs, err
 }
 
-func (ac *Activity) setStatus(status ActivityStatus) error {
+func (ac *database2.Activity) setStatus(status ActivityStatus) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
@@ -160,19 +161,19 @@ func (ac *Activity) setStatus(status ActivityStatus) error {
 	return err
 }
 
-func (ac *Activity) SetOpen() error {
+func (ac *database2.Activity) SetOpen() error {
 	return ac.setStatus(Open)
 }
 
-func (ac *Activity) SetInActive() error {
+func (ac *database2.Activity) SetInActive() error {
 	return ac.setStatus(InActive)
 }
 
-func (ac *Activity) SetClosed() error {
+func (ac *database2.Activity) SetClosed() error {
 	return ac.setStatus(Closed)
 }
 
-func (acp *ActivityPilot) Save() error {
+func (acp *database2.ActivityPilot) Save() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
@@ -180,7 +181,7 @@ func (acp *ActivityPilot) Save() error {
 	return err
 }
 
-func (acp *ActivityPilot) setStatus(status ActivityPilotStatus) error {
+func (acp *database2.ActivityPilot) setStatus(status ActivityPilotStatus) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
@@ -188,23 +189,23 @@ func (acp *ActivityPilot) setStatus(status ActivityPilotStatus) error {
 	return err
 }
 
-func (acp *ActivityPilot) SetSigned() error {
+func (acp *database2.ActivityPilot) SetSigned() error {
 	return acp.setStatus(Signed)
 }
 
-func (acp *ActivityPilot) SetClearance() error {
+func (acp *database2.ActivityPilot) SetClearance() error {
 	return acp.setStatus(Clearance)
 }
 
-func (acp *ActivityPilot) SetTakeoff() error {
+func (acp *database2.ActivityPilot) SetTakeoff() error {
 	return acp.setStatus(Takeoff)
 }
 
-func (acp *ActivityPilot) SetLanding() error {
+func (acp *database2.ActivityPilot) SetLanding() error {
 	return acp.setStatus(Landing)
 }
 
-func (aca *ActivityATC) Save() error {
+func (aca *database2.ActivityATC) Save() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
@@ -212,14 +213,14 @@ func (aca *ActivityATC) Save() error {
 	return err
 }
 
-func (aca *ActivityATC) Cancel() error {
+func (aca *database2.ActivityATC) Cancel() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	err := database.WithContext(ctx).Model(aca).Update("cid", 0).Error
 	return err
 }
 
-func (aca *ActivityATC) SetAtc(user *User) error {
+func (aca *database2.ActivityATC) SetAtc(user *database2.User) error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	err := database.WithContext(ctx).Model(aca).Update("cid", user.Cid).Error

@@ -15,12 +15,12 @@ type User struct {
 	Permission      int64           `gorm:"default:0" json:"permission"`
 	TotalPilotTime  int             `gorm:"default:0" json:"total_pilot_time"`
 	TotalAtcTime    int             `gorm:"default:0" json:"total_atc_time"`
-	CreatedAt       time.Time       `json:"-"`
-	UpdatedAt       time.Time       `json:"-"`
 	FlightPlans     []FlightPlan    `gorm:"foreignKey:Cid;references:Cid" json:"-"`
 	OnlineHistories []History       `gorm:"foreignKey:Cid;references:Cid" json:"-"`
 	ActivityAtc     []ActivityATC   `gorm:"foreignKey:Cid;references:Cid" json:"-"`
 	ActivityPilot   []ActivityPilot `gorm:"foreignKey:Cid;references:Cid" json:"-"`
+	CreatedAt       time.Time       `json:"-"`
+	UpdatedAt       time.Time       `json:"-"`
 }
 
 type FlightPlan struct {
@@ -56,8 +56,8 @@ type History struct {
 	EndTime    time.Time `gorm:"not null"`
 	OnlineTime int       `gorm:"default:0;not null"`
 	IsAtc      bool      `gorm:"default:0;not null"`
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	CreatedAt  time.Time `json:"-"`
+	UpdatedAt  time.Time `json:"-"`
 }
 
 type Activity struct {
