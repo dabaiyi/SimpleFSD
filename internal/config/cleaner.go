@@ -73,7 +73,7 @@ func (c *Cleaner) Clean() {
 	} else {
 		Debug("All cleaners executed successfully")
 	}
-	Info("Cleanup finished, server offline")
+	Info("Cleanup finished, fsd_server offline")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

@@ -2,9 +2,11 @@ package main
 
 import (
 	c "github.com/half-nothing/fsd-server/internal/config"
-	"github.com/half-nothing/fsd-server/internal/server"
-	"github.com/half-nothing/fsd-server/internal/server/database"
-	"github.com/half-nothing/fsd-server/internal/server/defination/fsd"
+	"github.com/half-nothing/fsd-server/internal/database"
+	"github.com/half-nothing/fsd-server/internal/fsd_server"
+	"github.com/half-nothing/fsd-server/internal/grpc_server"
+	"github.com/half-nothing/fsd-server/internal/http_server"
+	"github.com/half-nothing/fsd-server/internal/interfaces/fsd"
 )
 
 func main() {
@@ -19,14 +21,14 @@ func main() {
 	cleaner.Init(loggerCallback)
 	defer cleaner.Clean()
 	if err := database.ConnectDatabase(config); err != nil {
-		c.FatalF("Error occurred while initializing database, details: %v", err)
+		c.FatalF("Error occurred while initializing operation, details: %v", err)
 		return
 	}
 	if config.Server.HttpServer.Enabled {
-		go server.StartHttpServer(config)
+		go http_server.StartHttpServer(config)
 	}
 	if config.Server.GRPCServer.Enabled {
-		go server.StartGRPCServer(config.Server.GRPCServer)
+		go grpc_server.StartGRPCServer(config.Server.GRPCServer)
 	}
-	server.StartFSDServer(config)
+	fsd_server.StartFSDServer(config)
 }

@@ -206,7 +206,7 @@ func defaultSSLConfig() *SSLConfig {
 func (config *SSLConfig) CheckValid() (bool, error) {
 	if config.Enable {
 		if config.CertFile == "" || config.KeyFile == "" {
-			WarnF("HTTPS server requires both cert and key files. Cert: %s, Key: %s. Falling back to HTTP", config.CertFile, config.KeyFile)
+			WarnF("HTTPS fsd_server requires both cert and key files. Cert: %s, Key: %s. Falling back to HTTP", config.CertFile, config.KeyFile)
 			config.Enable = false
 		}
 	}
@@ -464,11 +464,13 @@ func (config *HttpServerStoreFileLimits) CheckValid() (bool, error) {
 }
 
 func (config *HttpServerStoreFileLimits) CreateDir(root string) (bool, error) {
-	imagePath := filepath.Join(root, config.ImageLimit.StorePrefix)
-	if err := os.MkdirAll(imagePath, 0644); err != nil {
-		return false, err
-	}
 	config.ImageLimit.RootPath = root
+	if config.ImageLimit.StoreInServer {
+		imagePath := filepath.Join(root, config.ImageLimit.StorePrefix)
+		if err := os.MkdirAll(imagePath, 0644); err != nil {
+			return false, err
+		}
+	}
 	return true, nil
 }
 
@@ -684,7 +686,7 @@ func (config *ServerConfig) CheckValid() (bool, error) {
 type DatabaseConfig struct {
 	Type                 string        `json:"type"`
 	DBType               DatabaseType  `json:"-"`
-	Database             string        `json:"database"`
+	Database             string        `json:"operation"`
 	Host                 string        `json:"host"`
 	Port                 int           `json:"port"`
 	Username             string        `json:"username"`
@@ -700,7 +702,7 @@ type DatabaseConfig struct {
 func defaultDatabaseConfig() *DatabaseConfig {
 	return &DatabaseConfig{
 		Type:                 "sqlite3",
-		Database:             "database.db",
+		Database:             "operation.db",
 		Host:                 "",
 		Port:                 0,
 		Username:             "",
@@ -715,7 +717,7 @@ func defaultDatabaseConfig() *DatabaseConfig {
 func (config *DatabaseConfig) CheckValid() (bool, error) {
 	config.DBType = DatabaseType(config.Type)
 	if !slices.Contains(allowedDatabaseType, config.DBType) {
-		return false, fmt.Errorf("database type %s is not allowed, support database is %v, please check the configuration file", config.DBType, allowedDatabaseType)
+		return false, fmt.Errorf("operation type %s is not allowed, support operation is %v, please check the configuration file", config.DBType, allowedDatabaseType)
 	}
 
 	if duration, err := time.ParseDuration(config.ConnectIdleTimeout); err != nil {
@@ -735,8 +737,8 @@ func (config *DatabaseConfig) CheckValid() (bool, error) {
 type Config struct {
 	DebugMode     bool            `json:"debug_mode"` // 是否启用调试模式
 	ConfigVersion string          `json:"config_version"`
-	Server        *ServerConfig   `json:"server"`
-	Database      *DatabaseConfig `json:"database"`
+	Server        *ServerConfig   `json:"fsd_server"`
+	Database      *DatabaseConfig `json:"operation"`
 	Rating        map[string]int  `json:"rating"`
 }
 
