@@ -194,9 +194,8 @@ func (lc *ShutdownCallback) Invoke(ctx context.Context) error {
 	return lc.handler.Close()
 }
 
-func Init() *ShutdownCallback {
+func Init(config *Config) *ShutdownCallback {
 	var handler *AsyncHandler
-	config, _ := GetConfig()
 	if config.DebugMode {
 		handler = NewAsyncHandler("logs", slog.LevelDebug)
 	} else {

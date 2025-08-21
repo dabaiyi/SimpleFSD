@@ -8,31 +8,25 @@ import (
 )
 
 func main() {
-	config, err := c.GetConfig()
-	if err != nil {
-		c.FatalF("Error occurred while reading config %v", err)
-		return
-	}
-	err = fsd.SyncRatingConfig()
-	if err != nil {
+	config := c.GetConfig()
+	if err := fsd.SyncRatingConfig(config); err != nil {
 		c.FatalF("Error occurred while handle rating config, details: %v", err)
 		return
 	}
-	loggerCallback := c.Init()
+	loggerCallback := c.Init(config)
 	c.Info("Application initializing...")
 	cleaner := c.GetCleaner()
 	cleaner.Init(loggerCallback)
 	defer cleaner.Clean()
-	err = database.ConnectDatabase()
-	if err != nil {
+	if err := database.ConnectDatabase(config); err != nil {
 		c.FatalF("Error occurred while initializing database, details: %v", err)
 		return
 	}
 	if config.Server.HttpServer.Enabled {
-		go server.StartHttpServer()
+		go server.StartHttpServer(config)
 	}
 	if config.Server.GRPCServer.Enabled {
-		go server.StartGRPCServer()
+		go server.StartGRPCServer(config.Server.GRPCServer)
 	}
-	server.StartFSDServer()
+	server.StartFSDServer(config)
 }

@@ -29,6 +29,7 @@ func TestStrToFloat(t *testing.T) {
 		if result != test.expected {
 			fail++
 			t.Errorf("StrToFloat(%q, %v) = %v; expected %v", test.input, test.defaultValue, result, test.expected)
+			continue
 		}
 		pass++
 	}
@@ -53,6 +54,7 @@ func TestStrToInt(t *testing.T) {
 		if result != test.expected {
 			fail++
 			t.Errorf("StrToInt(%q, %v) = %v; expected %v", test.input, test.defaultValue, result, test.expected)
+			continue
 		}
 		pass++
 	}

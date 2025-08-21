@@ -25,7 +25,7 @@ var (
 type EmailService struct {
 	emailCodes   map[string]EmailCode
 	lastSendTime map[string]time.Time
-	config       *c.Config
+	config       *c.EmailConfig
 }
 
 type EmailCode struct {
@@ -62,7 +62,7 @@ type EmailKickedFromServerData struct {
 	Contact  string
 }
 
-func NewEmailService(config *c.Config) *EmailService {
+func NewEmailService(config *c.EmailConfig) *EmailService {
 	once.Do(func() {
 		emailService = &EmailService{
 			config:       config,
@@ -101,7 +101,7 @@ func (emailService *EmailService) VerifyCode(email string, code int, cid int) er
 		return ErrEmailCodeNotFound
 	}
 
-	if time.Since(emailCode.sendTime) > emailService.config.Server.HttpServer.Email.VerifyExpiredDuration {
+	if time.Since(emailCode.sendTime) > emailService.config.VerifyExpiredDuration {
 		return ErrEmailCodeExpired
 	}
 
@@ -120,7 +120,7 @@ func (emailService *EmailService) VerifyCode(email string, code int, cid int) er
 func (emailService *EmailService) SendEmailCode(email string, cid int) error {
 	email = strings.ToLower(email)
 	if lastSendTime, ok := emailService.lastSendTime[email]; ok {
-		if time.Since(lastSendTime) < emailService.config.Server.HttpServer.Email.SendDuration {
+		if time.Since(lastSendTime) < emailService.config.SendDuration {
 			return ErrEmailSendInterval
 		}
 	}
@@ -129,17 +129,17 @@ func (emailService *EmailService) SendEmailCode(email string, cid int) error {
 	data := &EmailVerifyTemplateData{
 		Cid:     strconv.Itoa(cid),
 		Code:    strconv.Itoa(code),
-		Expired: strconv.Itoa(int(emailService.config.Server.HttpServer.Email.VerifyExpiredDuration.Minutes())),
+		Expired: strconv.Itoa(int(emailService.config.VerifyExpiredDuration.Minutes())),
 	}
 
-	message, err := emailService.RenderTemplate(emailService.config.Server.HttpServer.Email.Template.EmailVerifyTemplate, data)
+	message, err := emailService.RenderTemplate(emailService.config.Template.EmailVerifyTemplate, data)
 	if err != nil {
 		c.WarnF("Error rendering email verification template: %v", err)
 		return ErrRenderingTemplate
 	}
 
 	m := gomail.NewMessage()
-	m.SetHeader("From", emailService.config.Server.HttpServer.Email.Username)
+	m.SetHeader("From", emailService.config.Username)
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "您的验证码")
 	m.SetBody("text/html", message)
@@ -149,7 +149,7 @@ func (emailService *EmailService) SendEmailCode(email string, cid int) error {
 
 	c.InfoF("Sending email verification code(%d) to %s(%d)", code, email, cid)
 
-	return emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m)
+	return emailService.config.EmailServer.DialAndSend(m)
 }
 
 func (emailService *EmailService) SendPermissionChangeEmail(user *database.User, operator *database.User) error {
@@ -159,19 +159,19 @@ func (emailService *EmailService) SendPermissionChangeEmail(user *database.User,
 		Operator: strconv.Itoa(operator.Cid),
 		Contact:  operator.Email,
 	}
-	message, err := emailService.RenderTemplate(emailService.config.Server.HttpServer.Email.Template.PermissionChangeTemplate, data)
+	message, err := emailService.RenderTemplate(emailService.config.Template.PermissionChangeTemplate, data)
 	if err != nil {
 		c.WarnF("Error rendering email verification template: %v", err)
 		return ErrRenderingTemplate
 	}
 
 	m := gomail.NewMessage()
-	m.SetHeader("From", emailService.config.Server.HttpServer.Email.Username)
+	m.SetHeader("From", emailService.config.Username)
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "管理权限变更通知")
 	m.SetBody("text/html", message)
 
-	return emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m)
+	return emailService.config.EmailServer.DialAndSend(m)
 }
 
 func (emailService *EmailService) SendRatingChangeEmail(user *database.User, operator *database.User, oldRating, newRating fsd.Rating) error {
@@ -183,19 +183,19 @@ func (emailService *EmailService) SendRatingChangeEmail(user *database.User, ope
 		Operator: fmt.Sprintf("%04d", operator.Cid),
 		Contact:  operator.Email,
 	}
-	message, err := emailService.RenderTemplate(emailService.config.Server.HttpServer.Email.Template.ATCRatingChangeTemplate, data)
+	message, err := emailService.RenderTemplate(emailService.config.Template.ATCRatingChangeTemplate, data)
 	if err != nil {
 		c.WarnF("Error rendering email verification template: %v", err)
 		return ErrRenderingTemplate
 	}
 
 	m := gomail.NewMessage()
-	m.SetHeader("From", emailService.config.Server.HttpServer.Email.Username)
+	m.SetHeader("From", emailService.config.Username)
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "管制权限变更通知")
 	m.SetBody("text/html", message)
 
-	return emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m)
+	return emailService.config.EmailServer.DialAndSend(m)
 }
 
 func (emailService *EmailService) SendKickedFromServerEmail(user *database.User, operator *database.User, reason string) error {
@@ -207,19 +207,19 @@ func (emailService *EmailService) SendKickedFromServerEmail(user *database.User,
 		Operator: fmt.Sprintf("%04d", operator.Cid),
 		Contact:  operator.Email,
 	}
-	message, err := emailService.RenderTemplate(emailService.config.Server.HttpServer.Email.Template.KickedFromServerTemplate, data)
+	message, err := emailService.RenderTemplate(emailService.config.Template.KickedFromServerTemplate, data)
 	if err != nil {
 		c.WarnF("Error rendering email verification template: %v", err)
 		return ErrRenderingTemplate
 	}
 
 	m := gomail.NewMessage()
-	m.SetHeader("From", emailService.config.Server.HttpServer.Email.Username)
+	m.SetHeader("From", emailService.config.Username)
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "踢出服务器通知")
 	m.SetBody("text/html", message)
 
-	return emailService.config.Server.HttpServer.Email.EmailServer.DialAndSend(m)
+	return emailService.config.EmailServer.DialAndSend(m)
 }
 
 var (
@@ -240,7 +240,7 @@ func (emailService *EmailService) SendEmailVerifyCode(req *RequestEmailVerifyCod
 		return NewApiResponse[ResponseEmailVerifyCode](&ApiStatus{
 			StatusName: "EMAIL_SEND_INTERVAL",
 			Description: fmt.Sprintf("邮件已发送, 请在%d秒后重试",
-				int(emailService.config.Server.HttpServer.Email.SendDuration.Seconds())),
+				int(emailService.config.SendDuration.Seconds())),
 			HttpCode: BadRequest,
 		}, Unsatisfied, nil)
 	}

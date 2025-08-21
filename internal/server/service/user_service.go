@@ -3,8 +3,9 @@ package service
 
 import (
 	"errors"
-	logger "github.com/half-nothing/fsd-server/internal/config"
+	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
+	. "github.com/half-nothing/fsd-server/internal/server/defination"
 	"github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	"github.com/half-nothing/fsd-server/internal/utils"
@@ -12,10 +13,10 @@ import (
 
 type UserService struct {
 	emailService EmailServiceInterface
-	config       *logger.Config
+	config       *c.HttpServerConfig
 }
 
-func NewUserService(emailService EmailServiceInterface, config *logger.Config) *UserService {
+func NewUserService(emailService EmailServiceInterface, config *c.HttpServerConfig) *UserService {
 	return &UserService{
 		emailService: emailService,
 		config:       config,
@@ -74,8 +75,8 @@ func (userService *UserService) UserRegister(req *RequestUserRegister) *ApiRespo
 	}); res != nil {
 		return res
 	}
-	token := NewClaims(user, false)
-	flushToken := NewClaims(user, true)
+	token := NewClaims(userService.config.JWT, user, false)
+	flushToken := NewClaims(userService.config.JWT, user, true)
 	return NewApiResponse(&SuccessRegister, Unsatisfied, &ResponseUserRegister{
 		User:       user,
 		Token:      token.GenerateKey(),
@@ -102,8 +103,8 @@ func (userService *UserService) UserLogin(req *RequestUserLogin) *ApiResponse[Re
 	}
 
 	if pass := user.VerifyPassword(req.Password); pass {
-		token := NewClaims(user, false)
-		flushToken := NewClaims(user, true)
+		token := NewClaims(userService.config.JWT, user, false)
+		flushToken := NewClaims(userService.config.JWT, user, true)
 		return NewApiResponse(&SuccessLogin, Unsatisfied, &ResponseUserLogin{
 			User:       user,
 			Token:      token.GenerateKey(),
@@ -268,8 +269,8 @@ func (userService *UserService) GetUserProfile(req *RequestUserProfile) *ApiResp
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseUserProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := database.Permission(req.Permission)
-	if !permission.HasPermission(database.UserGetProfile) {
+	permission := Permission(req.Permission)
+	if !permission.HasPermission(UserGetProfile) {
 		return NewApiResponse[ResponseUserProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
 	user, res := CallDBFuncAndCheckError[database.User, ResponseUserProfile](func() (*database.User, error) {
@@ -289,8 +290,8 @@ func (userService *UserService) EditUserProfile(req *RequestUserEditProfile) *Ap
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseUserEditProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := database.Permission(req.Permission)
-	if !permission.HasPermission(database.UserEditBaseInfo) {
+	permission := Permission(req.Permission)
+	if !permission.HasPermission(UserEditBaseInfo) {
 		return NewApiResponse[ResponseUserEditProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
 	req.ID = req.TargetUid
@@ -312,8 +313,8 @@ func (userService *UserService) GetUserList(req *RequestUserList) *ApiResponse[R
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseUserList](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := database.Permission(req.Permission)
-	if !permission.HasPermission(database.UserShowList) {
+	permission := Permission(req.Permission)
+	if !permission.HasPermission(UserShowList) {
 		return NewApiResponse[ResponseUserList](&ErrNoPermission, Unsatisfied, nil)
 	}
 	users, total, err := database.GetUsers(req.Page, req.PageSize)
@@ -337,14 +338,14 @@ func (userService *UserService) EditUserPermission(req *RequestUserEditPermissio
 	if req.Uid <= 0 {
 		return NewApiResponse[ResponseUserEditPermission](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditPermission](req.Uid, req.TargetUid, database.UserEditPermission)
+	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditPermission](req.Uid, req.TargetUid, UserEditPermission)
 	if res != nil {
 		return res
 	}
-	permission := database.Permission(user.Permission)
-	targetPermission := database.Permission(targetUser.Permission)
+	permission := Permission(user.Permission)
+	targetPermission := Permission(targetUser.Permission)
 	for key, value := range req.Permissions {
-		if per, ok := database.PermissionMap[key]; ok {
+		if per, ok := PermissionMap[key]; ok {
 			if !permission.HasPermission(per) {
 				return NewApiResponse[ResponseUserEditPermission](&ErrNoPermission, Unsatisfied, nil)
 			}
@@ -368,9 +369,9 @@ func (userService *UserService) EditUserPermission(req *RequestUserEditPermissio
 		return res
 	}
 
-	if userService.config.Server.HttpServer.Email.Template.EnablePermissionChangeEmail {
+	if userService.config.Email.Template.EnablePermissionChangeEmail {
 		if err := userService.emailService.SendPermissionChangeEmail(targetUser, user); err != nil {
-			logger.ErrorF("SendPermissionChangeEmail Failed: %v", err)
+			c.ErrorF("SendPermissionChangeEmail Failed: %v", err)
 		}
 	}
 
@@ -386,7 +387,7 @@ func (userService *UserService) EditUserRating(req *RequestUserEditRating) *ApiR
 	if req.Uid <= 0 || req.Rating < fsd.Ban.Index() || req.Rating > fsd.Administrator.Index() {
 		return NewApiResponse[ResponseUserEditRating](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditRating](req.Uid, req.TargetUid, database.UserEditRating)
+	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditRating](req.Uid, req.TargetUid, UserEditRating)
 	if res != nil {
 		return res
 	}
@@ -402,9 +403,9 @@ func (userService *UserService) EditUserRating(req *RequestUserEditRating) *ApiR
 		return res
 	}
 
-	if userService.config.Server.HttpServer.Email.Template.EnableRatingChangeEmail {
+	if userService.config.Email.Template.EnableRatingChangeEmail {
 		if err := userService.emailService.SendRatingChangeEmail(targetUser, user, oldRating, newRating); err != nil {
-			logger.ErrorF("SendRatingChangeEmail Failed: %v", err)
+			c.ErrorF("SendRatingChangeEmail Failed: %v", err)
 		}
 	}
 

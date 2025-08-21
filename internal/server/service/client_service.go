@@ -5,6 +5,7 @@ import (
 	"errors"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
+	. "github.com/half-nothing/fsd-server/internal/server/defination"
 	"github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	"github.com/half-nothing/fsd-server/internal/utils"
@@ -15,16 +16,16 @@ type ClientService struct {
 	onlineClient  *utils.CachedValue[OnlineClients]
 	clientManager fsd.ClientManagerInterface
 	emailService  EmailServiceInterface
-	config        *c.Config
+	config        *c.HttpServerConfig
 }
 
-func NewClientService(config *c.Config, clientManager fsd.ClientManagerInterface, emailService EmailServiceInterface) *ClientService {
+func NewClientService(config *c.HttpServerConfig, clientManager fsd.ClientManagerInterface, emailService EmailServiceInterface) *ClientService {
 	service := &ClientService{
 		clientManager: clientManager,
 		emailService:  emailService,
 		config:        config,
 	}
-	service.onlineClient = utils.NewCachedValue[OnlineClients](config.Server.HttpServer.CacheDuration, func() *OnlineClients { return service.getOnlineClient() })
+	service.onlineClient = utils.NewCachedValue[OnlineClients](config.CacheDuration, func() *OnlineClients { return service.getOnlineClient() })
 	return service
 }
 
@@ -72,8 +73,10 @@ func (clientService *ClientService) getOnlineClient() *OnlineClients {
 				Latitude:    client.Position()[0].Latitude,
 				Longitude:   client.Position()[0].Longitude,
 				Transponder: client.Transponder(),
+				Heading:     client.Heading(),
 				Altitude:    client.Altitude(),
 				GroundSpeed: client.GroundSpeed(),
+				FlightPlan:  client.FlightPlan(),
 				LogonTime:   client.History().StartTime.Format(time.DateTime),
 			}
 			data.Pilots = append(data.Pilots, pilot)
@@ -85,12 +88,8 @@ func (clientService *ClientService) getOnlineClient() *OnlineClients {
 	return data
 }
 
-var SuccessGetOnlineClients = ApiStatus{StatusName: "GET_ONLINE_CLIENTS", Description: "获取成功", HttpCode: Ok}
-
-func (clientService *ClientService) GetOnlineClient() *ApiResponse[ResponseOnlineClient] {
-	return NewApiResponse(&SuccessGetOnlineClients, Unsatisfied, &ResponseOnlineClient{
-		OnlineClients: clientService.onlineClient.GetValue(),
-	})
+func (clientService *ClientService) GetOnlineClient() *OnlineClients {
+	return clientService.onlineClient.GetValue()
 }
 
 var (
@@ -105,8 +104,8 @@ func (clientService *ClientService) SendMessageToClient(req *RequestSendMessageT
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseSendMessageToClient](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := database.Permission(req.Permission)
-	if !permission.HasPermission(database.ClientSendMessage) {
+	permission := Permission(req.Permission)
+	if !permission.HasPermission(ClientSendMessage) {
 		return NewApiResponse[ResponseSendMessageToClient](&ErrNoPermission, Unsatisfied, nil)
 	}
 	if err := clientService.clientManager.SendRawMessageTo(req.Cid, req.SendTo, req.Message); errors.Is(err, fsd.ErrCallsignNotFound) {
@@ -126,8 +125,8 @@ func (clientService *ClientService) KillClient(req *RequestKillClient) *ApiRespo
 	if res != nil {
 		return res
 	}
-	permission := database.Permission(user.Permission)
-	if !permission.HasPermission(database.ClientKill) {
+	permission := Permission(user.Permission)
+	if !permission.HasPermission(ClientKill) {
 		return NewApiResponse[ResponseKillClient](&ErrNoPermission, Unsatisfied, nil)
 	}
 	client, ok := clientService.clientManager.GetClient(req.TargetCallsign)
@@ -135,7 +134,7 @@ func (clientService *ClientService) KillClient(req *RequestKillClient) *ApiRespo
 		return NewApiResponse[ResponseKillClient](&ErrCallsignNotFound, Unsatisfied, nil)
 	}
 	client.MarkedDisconnect(false)
-	if clientService.config.Server.HttpServer.Email.Template.EnableKickedFromServerEmail {
+	if clientService.config.Email.Template.EnableKickedFromServerEmail {
 		if err := clientService.emailService.SendKickedFromServerEmail(client.User(), user, req.Reason); err != nil {
 			c.ErrorF("SendRatingChangeEmail Failed: %v", err)
 		}

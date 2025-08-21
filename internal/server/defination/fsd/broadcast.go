@@ -2,7 +2,6 @@
 package fsd
 
 import (
-	c "github.com/half-nothing/fsd-server/internal/config"
 	"math"
 )
 
@@ -36,12 +35,7 @@ func BroadcastToSup(toClient, _ ClientInterface) bool {
 	if !toClient.IsAtc() {
 		return false
 	}
-	config, _ := c.GetConfig()
-	if config.Server.FSDServer.SendWallopToADM {
-		return toClient.Rating() >= Supervisor
-	} else {
-		return toClient.Rating() == Supervisor
-	}
+	return toClient.Rating() >= Supervisor
 }
 
 func BroadcastToClientInRange(toClient, fromClient ClientInterface) bool {

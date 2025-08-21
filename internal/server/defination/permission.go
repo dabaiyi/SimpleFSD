@@ -1,5 +1,5 @@
-// Package database
-package database
+// Package defination
+package defination
 
 type Permission int64
 

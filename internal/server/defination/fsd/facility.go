@@ -55,8 +55,7 @@ func (r Rating) CheckRatingFacility(facility Facility) bool {
 	return RatingFacilityMap[r].CheckFacility(facility)
 }
 
-func SyncRatingConfig() error {
-	config, _ := c.GetConfig()
+func SyncRatingConfig(config *c.Config) error {
 	if len(config.Rating) == 0 {
 		return nil
 	}

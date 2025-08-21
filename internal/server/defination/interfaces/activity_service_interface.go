@@ -1,6 +1,10 @@
 // Package interfaces
 package interfaces
 
+import (
+	"github.com/half-nothing/fsd-server/internal/server/database"
+)
+
 type ActivityModel struct {
 	Id         uint   `json:"id"`
 	Publisher  int    `json:"publisher"`
@@ -29,14 +33,29 @@ type ActivityServiceInterface interface {
 }
 
 type RequestGetActivities struct {
-	Page     int `query:"page_number"`
-	PageSize int `query:"page_size"`
+	Time string `query:"time"`
 }
-type ResponseGetActivities struct{}
-type RequestActivityInfo struct{}
-type ResponseActivityInfo struct{}
-type RequestAddActivity struct{}
-type ResponseAddActivity struct{}
+
+type ResponseGetActivities struct {
+	Items []*database.Activity `json:"items"`
+}
+
+type RequestActivityInfo struct {
+	ActivityId uint `param:"id"`
+}
+
+type ResponseActivityInfo database.Activity
+
+type RequestAddActivity struct {
+	JwtHeader
+	Cid int
+	*database.Activity
+}
+
+type ResponseAddActivity struct {
+	*database.Activity
+}
+
 type RequestDeleteActivity struct{}
 type ResponseDeleteActivity struct{}
 type RequestEditActivity struct{}

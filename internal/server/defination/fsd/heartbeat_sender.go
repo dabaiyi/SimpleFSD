@@ -2,7 +2,7 @@ package fsd
 
 import (
 	"fmt"
-	logger "github.com/half-nothing/fsd-server/internal/config"
+	"github.com/half-nothing/fsd-server/internal/config"
 	"time"
 )
 
@@ -34,7 +34,7 @@ func (h *HeartbeatSender) Start() {
 			case <-h.ticker.C:
 				err := h.sendFunc()
 				if err != nil {
-					logger.ErrorF("Error sending heartbeat: %v\n", err)
+					config.ErrorF("Error sending heartbeat: %v\n", err)
 				}
 			case <-h.stopChan:
 				return

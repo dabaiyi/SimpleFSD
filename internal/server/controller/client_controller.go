@@ -5,9 +5,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	"github.com/labstack/echo/v4"
+	"net/http"
 )
 
 type ClientControllerInterface interface {
+	GetServerWhazzup(ctx echo.Context) error
 	GetOnlineClients(ctx echo.Context) error
 	SendMessageToClient(ctx echo.Context) error
 	KillClient(ctx echo.Context) error
@@ -22,7 +24,7 @@ func NewClientController(clientService ClientServiceInterface) *ClientController
 }
 
 func (controller *ClientController) GetOnlineClients(ctx echo.Context) error {
-	return controller.clientService.GetOnlineClient().Response(ctx)
+	return ctx.JSON(http.StatusOK, controller.clientService.GetOnlineClient())
 }
 
 func (controller *ClientController) SendMessageToClient(ctx echo.Context) error {

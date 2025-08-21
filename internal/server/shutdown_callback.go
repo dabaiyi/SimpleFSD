@@ -3,7 +3,7 @@ package server
 
 import (
 	"context"
-	"github.com/half-nothing/fsd-server/internal/server/packet"
+	"github.com/half-nothing/fsd-server/internal/server/defination/fsd"
 	"github.com/labstack/echo/v4"
 	"google.golang.org/grpc"
 	"time"
@@ -55,10 +55,11 @@ func (g *GrpcShutdownCallback) Invoke(ctx context.Context) error {
 }
 
 type FsdCloseCallback struct {
+	clientManager fsd.ClientManagerInterface
 }
 
-func NewFsdCloseCallback() *FsdCloseCallback {
-	return &FsdCloseCallback{}
+func NewFsdCloseCallback(clientManager fsd.ClientManagerInterface) *FsdCloseCallback {
+	return &FsdCloseCallback{clientManager: clientManager}
 }
 
 func (dc *FsdCloseCallback) Invoke(ctx context.Context) error {
@@ -67,8 +68,7 @@ func (dc *FsdCloseCallback) Invoke(ctx context.Context) error {
 
 	done := make(chan struct{})
 	go func() {
-		err := packet.GetClientManager().Shutdown(timeoutCtx)
-		if err != nil {
+		if err := dc.clientManager.Shutdown(timeoutCtx); err != nil {
 			return
 		}
 		close(done)

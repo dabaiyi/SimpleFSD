@@ -2,10 +2,11 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/controller"
-	"github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
+	. "github.com/half-nothing/fsd-server/internal/server/defination/interfaces"
 	gs "github.com/half-nothing/fsd-server/internal/server/grpc"
 	mid "github.com/half-nothing/fsd-server/internal/server/middleware"
 	"github.com/half-nothing/fsd-server/internal/server/packet"
@@ -24,33 +25,13 @@ import (
 	"time"
 )
 
-var (
-	ErrMissingOrMalformedJwt = interfaces.ApiStatus{StatusName: "MISSING_OR_MALFORMED_JWT", Description: "缺少JWT令牌或者令牌格式错误", HttpCode: interfaces.BadRequest}
-	ErrInvalidOrExpiredJwt   = interfaces.ApiStatus{StatusName: "INVALID_OR_EXPIRED_JWT", Description: "无效或过期的JWT令牌", HttpCode: interfaces.Unauthorized}
-	ErrUnknown               = interfaces.ApiStatus{StatusName: "UNKNOWN_JWT_ERROR", Description: "未知的JWT解析错误", HttpCode: interfaces.ServerInternalError}
-)
-
-func StartHttpServer() {
-	config, _ := c.GetConfig()
+func StartHttpServer(config *c.Config) {
 	e := echo.New()
 	e.Logger.SetOutput(io.Discard)
 	e.Logger.SetLevel(log.OFF)
+	httpConfig := config.Server.HttpServer
 
-	if config.Server.HttpServer.SSL.Enable {
-		if config.Server.HttpServer.SSL.CertFile == "" || config.Server.HttpServer.SSL.KeyFile == "" {
-			c.WarnF("HTTPS server requires both cert and key files. Cert: %s, Key: %s. Falling back to HTTP",
-				config.Server.HttpServer.SSL.CertFile,
-				config.Server.HttpServer.SSL.KeyFile)
-			config.Server.HttpServer.SSL.Enable = false
-		}
-	} else if config.Server.HttpServer.SSL.EnableHSTS {
-		c.Warn("You can enable HSTS when ssl is not enable!")
-		config.Server.HttpServer.SSL.EnableHSTS = false
-		config.Server.HttpServer.SSL.HstsExpiredTime = 0
-		config.Server.HttpServer.SSL.IncludeDomain = true
-	}
-
-	switch config.Server.HttpServer.ProxyType {
+	switch httpConfig.ProxyType {
 	case 0:
 		e.IPExtractor = echo.ExtractIPDirect()
 	case 1:
@@ -58,7 +39,7 @@ func StartHttpServer() {
 	case 2:
 		e.IPExtractor = echo.ExtractIPFromRealIPHeader()
 	default:
-		c.WarnF("Invalid proxy type %d, using default (direct)", config.Server.HttpServer.ProxyType)
+		c.WarnF("Invalid proxy type %d, using default (direct)", httpConfig.ProxyType)
 		e.IPExtractor = echo.ExtractIPDirect()
 	}
 
@@ -80,74 +61,89 @@ func StartHttpServer() {
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "SAMEORIGIN",
-		HSTSMaxAge:            config.Server.HttpServer.SSL.HstsExpiredTime,
-		HSTSExcludeSubdomains: !config.Server.HttpServer.SSL.IncludeDomain,
+		HSTSMaxAge:            httpConfig.SSL.HstsExpiredTime,
+		HSTSExcludeSubdomains: !httpConfig.SSL.IncludeDomain,
 	}))
 	e.Use(middleware.CORS())
-	e.Use(middleware.BodyLimit("64KB"))
+	if httpConfig.BodyLimit != "" {
+		e.Use(middleware.BodyLimit(httpConfig.BodyLimit))
+	}
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 		Level: 5,
 	}))
 
-	if config.Server.HttpServer.RateLimit <= 0 {
-		c.WarnF("Invalid rate limit value %d, using default 100", config.Server.HttpServer.RateLimit)
-		config.Server.HttpServer.RateLimit = 100
+	if httpConfig.Limits.RateLimit <= 0 {
+		c.WarnF("Invalid rate limit value %d, using default 15", httpConfig.Limits.RateLimit)
+		httpConfig.Limits.RateLimit = 15
 	}
 
-	if config.Server.HttpServer.RateLimitDuration <= 0 {
-		c.WarnF("Invalid rate limit duration %v, using default 1m", config.Server.HttpServer.RateLimitDuration)
-		config.Server.HttpServer.RateLimitDuration = time.Minute
+	if httpConfig.Limits.RateLimitDuration <= 0 {
+		c.WarnF("Invalid rate limit duration %v, using default 1m", httpConfig.Limits.RateLimitDuration)
+		httpConfig.Limits.RateLimitDuration = time.Minute
 	}
 
 	ipPathLimiter := mid.NewSlidingWindowLimiter(
-		config.Server.HttpServer.RateLimitDuration,
-		config.Server.HttpServer.RateLimit,
+		httpConfig.Limits.RateLimitDuration,
+		httpConfig.Limits.RateLimit,
 	)
-	cleanupInterval := config.Server.HttpServer.RateLimitDuration * 2
+	cleanupInterval := httpConfig.Limits.RateLimitDuration * 2
 	if cleanupInterval > time.Hour {
 		cleanupInterval = time.Hour
 		c.InfoF("Limiting cleanup interval to 1 hour for efficiency")
 	}
 	ipPathLimiter.StartCleanup(cleanupInterval)
 
+	whazzupContent := fmt.Sprintf("url0=%s/api/clients", httpConfig.WhazzupUrlHeader)
+
 	e.Use(mid.RateLimitMiddleware(ipPathLimiter, mid.CombinedKeyFunc))
 
 	jwtConfig := echojwt.Config{
-		SigningKey:    []byte(config.Server.HttpServer.JWT.Secret),
+		SigningKey:    []byte(httpConfig.JWT.Secret),
 		TokenLookup:   "header:Authorization:Bearer ",
 		SigningMethod: "HS512",
 		NewClaimsFunc: func(c echo.Context) jwt.Claims {
-			return new(interfaces.Claims)
+			return new(Claims)
 		},
 		ErrorHandler: func(c echo.Context, err error) error {
-			var data *interfaces.ApiResponse[any]
-
+			var data *ApiResponse[any]
 			switch {
 			case errors.Is(err, echojwt.ErrJWTMissing):
-				data = interfaces.NewApiResponse[any](&ErrMissingOrMalformedJwt, interfaces.Unsatisfied, nil)
+				data = NewApiResponse[any](&ErrMissingOrMalformedJwt, Unsatisfied, nil)
 			case errors.Is(err, echojwt.ErrJWTInvalid):
-				data = interfaces.NewApiResponse[any](&ErrInvalidOrExpiredJwt, interfaces.Unsatisfied, nil)
+				data = NewApiResponse[any](&ErrInvalidOrExpiredJwt, Unsatisfied, nil)
 			default:
-				data = interfaces.NewApiResponse[any](&ErrUnknown, interfaces.Unsatisfied, nil)
+				data = NewApiResponse[any](&ErrUnknown, Unsatisfied, nil)
 			}
-
 			return data.Response(c)
 		},
 	}
 
 	jwtMiddleware := echojwt.WithConfig(jwtConfig)
 
-	emailService := service.NewEmailService(config)
-	service.InitValidator()
-	userService := service.NewUserService(emailService, config)
-	clientManager := packet.GetClientManager()
-	clientService := service.NewClientService(config, clientManager, emailService)
-	serverService := service.NewServerService(config)
+	emailService := service.NewEmailService(config.Server.HttpServer.Email)
+	service.InitValidator(config.Server.HttpServer.Limits)
+
+	var storeService StoreServiceInterface
+	storeService = service.NewLocalStoreService(httpConfig.Store)
+	switch httpConfig.Store.StoreType {
+	case 1:
+		storeService = service.NewALiYunOssStoreService(storeService, httpConfig.Store)
+	case 2:
+		storeService = service.NewTencentCosStoreService(storeService, httpConfig.Store)
+	}
+
+	userService := service.NewUserService(emailService, httpConfig)
+	clientManager := packet.NewClientManager(config)
+	clientService := service.NewClientService(httpConfig, clientManager, emailService)
+	serverService := service.NewServerService(config.Server)
+	activityService := service.NewActivityService(httpConfig)
 
 	userController := controller.NewUserHandler(userService)
 	emailController := controller.NewEmailController(emailService)
 	clientController := controller.NewClientController(clientService)
 	serverController := controller.NewServerController(serverService)
+	activityController := controller.NewActivityController(activityService)
+	fileController := controller.NewFileController(storeService)
 
 	apiGroup := e.Group("/api")
 	apiGroup.POST("/sessions", userController.UserLoginHandler)
@@ -165,6 +161,7 @@ func StartHttpServer() {
 	userGroup.PUT("/:uid/rating", userController.EditUserRating, jwtMiddleware)
 
 	clientGroup := apiGroup.Group("/clients")
+	clientGroup.GET("/status", func(c echo.Context) error { return c.String(http.StatusOK, whazzupContent) })
 	clientGroup.GET("", clientController.GetOnlineClients)
 	clientGroup.POST("/:callsign/message", clientController.SendMessageToClient, jwtMiddleware)
 	clientGroup.DELETE("/:callsign", clientController.KillClient, jwtMiddleware)
@@ -172,26 +169,36 @@ func StartHttpServer() {
 	serverGroup := apiGroup.Group("/server")
 	serverGroup.GET("/config", serverController.GetServerConfig)
 
+	activityGroup := apiGroup.Group("/activities")
+	activityGroup.GET("", activityController.GetActivities)
+	activityGroup.GET("/:id", activityController.GetActivityInfo)
+	activityGroup.POST("", activityController.AddActivity, jwtMiddleware)
+
+	fileGroup := apiGroup.Group("/files")
+	fileGroup.POST("/images", fileController.UploadImages, jwtMiddleware)
+
+	e.Use(middleware.Static(httpConfig.Store.LocalStorePath))
+
 	c.GetCleaner().Add(NewHttpServerShutdownCallback(e))
 
 	protocol := "http"
-	if config.Server.HttpServer.SSL.Enable {
+	if httpConfig.SSL.Enable {
 		protocol = "https"
 	}
-	c.InfoF("Starting %s server on %s", protocol, config.Server.HttpServer.Address)
+	c.InfoF("Starting %s server on %s", protocol, httpConfig.Address)
 	c.InfoF("Rate limit: %d requests per %v",
-		config.Server.HttpServer.RateLimit,
-		config.Server.HttpServer.RateLimitDuration)
+		httpConfig.Limits.RateLimit,
+		httpConfig.Limits.RateLimitDuration)
 
 	var err error
-	if config.Server.HttpServer.SSL.Enable {
+	if httpConfig.SSL.Enable {
 		err = e.StartTLS(
-			config.Server.HttpServer.Address,
-			config.Server.HttpServer.SSL.CertFile,
-			config.Server.HttpServer.SSL.KeyFile,
+			httpConfig.Address,
+			httpConfig.SSL.CertFile,
+			httpConfig.SSL.KeyFile,
 		)
 	} else {
-		err = e.Start(config.Server.HttpServer.Address)
+		err = e.Start(httpConfig.Address)
 	}
 
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -199,16 +206,15 @@ func StartHttpServer() {
 	}
 }
 
-func StartGRPCServer() {
-	config, _ := c.GetConfig()
-	ln, err := net.Listen("tcp", config.Server.GRPCServer.Address)
+func StartGRPCServer(config *c.GRPCServerConfig) {
+	ln, err := net.Listen("tcp", config.Address)
 	if err != nil {
 		c.FatalF("Fail to open grpc port: %v", err)
 		return
 	}
 	c.InfoF("GRPC server listen on %s", ln.Addr().String())
 	grpcServer := grpc.NewServer()
-	gs.RegisterServerStatusServer(grpcServer, gs.NewGrpcServer(config.Server.GRPCServer.CacheDuration))
+	gs.RegisterServerStatusServer(grpcServer, gs.NewGrpcServer(config.CacheDuration))
 	reflection.Register(grpcServer)
 	c.GetCleaner().Add(NewGrpcShutdownCallback(grpcServer))
 	err = grpcServer.Serve(ln)
@@ -219,11 +225,9 @@ func StartGRPCServer() {
 }
 
 // StartFSDServer 启动FSD服务器
-func StartFSDServer() {
-	config, _ := c.GetConfig()
-
+func StartFSDServer(config *c.Config) {
 	// 初始化客户端管理器
-	_ = packet.GetClientManager()
+	cm := packet.NewClientManager(config)
 
 	// 创建TCP监听器
 	sem := make(chan struct{}, config.Server.FSDServer.MaxWorkers)
@@ -242,7 +246,7 @@ func StartFSDServer() {
 		}
 	}()
 
-	c.GetCleaner().Add(NewFsdCloseCallback())
+	c.GetCleaner().Add(NewFsdCloseCallback(cm))
 
 	// 循环接受新的连接
 	for {
@@ -257,7 +261,7 @@ func StartFSDServer() {
 		// 使用信号量控制并发连接数
 		sem <- struct{}{}
 		go func(c net.Conn) {
-			connection := packet.NewConnectionHandler(conn, conn.RemoteAddr().String())
+			connection := packet.NewConnectionHandler(conn, conn.RemoteAddr().String(), config, cm)
 			connection.HandleConnection()
 			// 释放信号量
 			<-sem

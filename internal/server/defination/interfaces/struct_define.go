@@ -1,4 +1,4 @@
-// Package service
+// Package interfaces
 package interfaces
 
 import (
@@ -6,6 +6,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
+	"github.com/half-nothing/fsd-server/internal/server/defination"
 	"github.com/labstack/echo/v4"
 	"time"
 )
@@ -45,7 +46,9 @@ type Claims struct {
 	Cid        int    `json:"cid"`
 	Username   string `json:"username"`
 	Permission int64  `json:"permission"`
+	Rating     int    `json:"rating"`
 	FlushToken bool   `json:"flushToken"`
+	config     *c.JWTConfig
 	jwt.RegisteredClaims
 }
 
@@ -54,18 +57,19 @@ type JwtHeader struct {
 	Permission int64
 }
 
-func NewClaims(user *database.User, flushToken bool) *Claims {
-	config, _ := c.GetConfig()
-	expiredDuration := config.Server.HttpServer.JWT.ExpiresDuration
+func NewClaims(config *c.JWTConfig, user *database.User, flushToken bool) *Claims {
+	expiredDuration := config.ExpiresDuration
 	if flushToken {
-		expiredDuration += config.Server.HttpServer.JWT.RefreshDuration
+		expiredDuration += config.RefreshDuration
 	}
 	return &Claims{
 		Uid:        user.ID,
 		Cid:        user.Cid,
 		Username:   user.Username,
 		Permission: user.Permission,
+		Rating:     user.Rating,
 		FlushToken: flushToken,
+		config:     config,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "FsdHttpServer",
 			Subject:   user.Username,
@@ -77,9 +81,8 @@ func NewClaims(user *database.User, flushToken bool) *Claims {
 }
 
 func (claim *Claims) GenerateKey() string {
-	config, _ := c.GetConfig()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claim)
-	tokenString, _ := token.SignedString([]byte(config.Server.HttpServer.JWT.Secret))
+	tokenString, _ := token.SignedString([]byte(claim.config.Secret))
 	return tokenString
 }
 
@@ -88,13 +91,16 @@ func (res *ApiResponse[T]) Response(ctx echo.Context) error {
 }
 
 var (
-	ErrIllegalParam    = ApiStatus{"PARAM_ERROR", "参数不正确", BadRequest}
-	ErrLackParam       = ApiStatus{"PARAM_LACK_ERROR", "缺少参数", BadRequest}
-	ErrNoPermission    = ApiStatus{"NO_PERMISSION", "无权这么做", PermissionDenied}
-	ErrDatabaseFail    = ApiStatus{"DATABASE_ERROR", "服务器内部错误", ServerInternalError}
-	ErrUserNotFound    = ApiStatus{"USER_NOT_FOUND", "指定用户不存在", NotFound}
-	ErrRegisterFail    = ApiStatus{"REGISTER_FAIL", "注册失败", ServerInternalError}
-	ErrIdentifierTaken = ApiStatus{"USER_EXISTS", "用户已存在", BadRequest}
+	ErrIllegalParam          = ApiStatus{"PARAM_ERROR", "参数不正确", BadRequest}
+	ErrLackParam             = ApiStatus{"PARAM_LACK_ERROR", "缺少参数", BadRequest}
+	ErrNoPermission          = ApiStatus{"NO_PERMISSION", "无权这么做", PermissionDenied}
+	ErrDatabaseFail          = ApiStatus{"DATABASE_ERROR", "服务器内部错误", ServerInternalError}
+	ErrUserNotFound          = ApiStatus{"USER_NOT_FOUND", "指定用户不存在", NotFound}
+	ErrRegisterFail          = ApiStatus{"REGISTER_FAIL", "注册失败", ServerInternalError}
+	ErrIdentifierTaken       = ApiStatus{"USER_EXISTS", "用户已存在", BadRequest}
+	ErrMissingOrMalformedJwt = ApiStatus{"MISSING_OR_MALFORMED_JWT", "缺少JWT令牌或者令牌格式错误", BadRequest}
+	ErrInvalidOrExpiredJwt   = ApiStatus{"INVALID_OR_EXPIRED_JWT", "无效或过期的JWT令牌", Unauthorized}
+	ErrUnknown               = ApiStatus{"UNKNOWN_JWT_ERROR", "未知的JWT解析错误", ServerInternalError}
 )
 
 func NewErrorResponse(ctx echo.Context, codeStatus *ApiStatus) error {
@@ -132,13 +138,13 @@ func CallDBFuncAndCheckError[R any, T any](fc func() (*R, error)) (*R, *ApiRespo
 	}
 }
 
-func GetUsersAndCheckPermission[T any](uid, targetUid uint, perm database.Permission) (*database.User, *database.User, *ApiResponse[T]) {
+func GetUsersAndCheckPermission[T any](uid, targetUid uint, perm defination.Permission) (*database.User, *database.User, *ApiResponse[T]) {
 	// 敏感操作获取实时数据
 	user, res := CallDBFuncAndCheckError[database.User, T](func() (*database.User, error) { return database.GetUserById(uid) })
 	if res != nil {
 		return nil, nil, res
 	}
-	permission := database.Permission(user.Permission)
+	permission := defination.Permission(user.Permission)
 	if !permission.HasPermission(perm) {
 		return nil, nil, NewApiResponse[T](&ErrNoPermission, Unsatisfied, nil)
 	}

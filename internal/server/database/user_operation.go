@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"errors"
+	"github.com/half-nothing/fsd-server/internal/server/defination"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -185,7 +186,7 @@ func (user *User) UpdateRating(rating int) error {
 	})
 }
 
-func (user *User) UpdatePermission(permission Permission) error {
+func (user *User) UpdatePermission(permission defination.Permission) error {
 	user.Permission = int64(permission)
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()

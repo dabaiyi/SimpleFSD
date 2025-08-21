@@ -16,30 +16,30 @@ type ClientManager struct {
 	clients         map[string]ClientInterface
 	lock            sync.RWMutex
 	shuttingDown    atomic.Bool
+	config          *c.Config
+	heartbeatSender *HeartbeatSender
 	clientSlicePool sync.Pool
 }
 
 var (
-	clientManager   *ClientManager
-	heartbeatSender *HeartbeatSender
-	config          *c.Config
-	once            sync.Once
+	clientManager *ClientManager
+	once          sync.Once
 )
 
-func GetClientManager() *ClientManager {
+func NewClientManager(config *c.Config) *ClientManager {
 	once.Do(func() {
-		config, _ = c.GetConfig()
 		if clientManager == nil {
 			clientManager = &ClientManager{
 				clients:      make(map[string]ClientInterface),
 				shuttingDown: atomic.Bool{},
+				config:       config,
 				clientSlicePool: sync.Pool{
 					New: func() interface{} {
 						return make([]ClientInterface, 0, 128)
 					},
 				},
 			}
-			heartbeatSender = NewHeartbeatSender(config.Server.FSDServer.HeartbeatDuration, clientManager.SendHeartBeat)
+			clientManager.heartbeatSender = NewHeartbeatSender(config.Server.FSDServer.HeartbeatDuration, clientManager.SendHeartBeat)
 		}
 	})
 	return clientManager
@@ -56,7 +56,7 @@ func (cm *ClientManager) Shutdown(ctx context.Context) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	heartbeatSender.Stop()
+	cm.heartbeatSender.Stop()
 
 	clients := cm.GetClientSnapshot()
 	defer cm.PutSlice(clients)
@@ -96,7 +96,7 @@ func (cm *ClientManager) disconnectClients(clients []ClientInterface) {
 		return
 	}
 
-	sem := make(chan struct{}, config.Server.FSDServer.MaxBroadcastWorkers)
+	sem := make(chan struct{}, cm.config.Server.FSDServer.MaxBroadcastWorkers)
 	var wg sync.WaitGroup
 
 	for _, client := range clients {
@@ -209,7 +209,7 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient ClientInter
 
 	// 并发广播
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, config.Server.FSDServer.MaxBroadcastWorkers)
+	sem := make(chan struct{}, cm.config.Server.FSDServer.MaxBroadcastWorkers)
 
 	for _, client := range clients {
 		if client == fromClient || client.Disconnected() {
@@ -228,7 +228,7 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient ClientInter
 				wg.Done()
 			}()
 
-			c.DebugF("[Broadcast] -> [%s] %s", cl.Callsign, message)
+			c.DebugF("[Broadcast] -> [%s] %s", cl.Callsign(), message)
 			cl.SendLineWithoutLog(fullMsg)
 		}(client)
 	}

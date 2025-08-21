@@ -9,11 +9,11 @@ import (
 )
 
 type ServerService struct {
-	config       *c.Config
+	config       *c.ServerConfig
 	serverConfig *utils.CachedValue[ServerConfig]
 }
 
-func NewServerService(config *c.Config) *ServerService {
+func NewServerService(config *c.ServerConfig) *ServerService {
 	service := &ServerService{
 		config: config,
 	}
@@ -24,15 +24,15 @@ func NewServerService(config *c.Config) *ServerService {
 func (serverService *ServerService) getServerConfig() *ServerConfig {
 	return &ServerConfig{
 		Limits: &ServerLimits{
-			UsernameLengthMin: serverService.config.Server.HttpServer.UsernameLengthMin,
-			UsernameLengthMax: serverService.config.Server.HttpServer.UsernameLengthMax,
-			PasswordLengthMin: serverService.config.Server.HttpServer.PasswordLengthMin,
-			PasswordLengthMax: serverService.config.Server.HttpServer.PasswordLengthMax,
-			EmailLengthMin:    serverService.config.Server.HttpServer.EmailLengthMin,
-			EmailLengthMax:    serverService.config.Server.HttpServer.EmailLengthMax,
-			CidMin:            serverService.config.Server.HttpServer.CidMin,
-			CidMax:            serverService.config.Server.HttpServer.CidMax,
-			SimulatorServer:   serverService.config.Server.General.SimulatorServer,
+			UsernameLengthMin: serverService.config.HttpServer.Limits.UsernameLengthMin,
+			UsernameLengthMax: serverService.config.HttpServer.Limits.UsernameLengthMax,
+			PasswordLengthMin: serverService.config.HttpServer.Limits.PasswordLengthMin,
+			PasswordLengthMax: serverService.config.HttpServer.Limits.PasswordLengthMax,
+			EmailLengthMin:    serverService.config.HttpServer.Limits.EmailLengthMin,
+			EmailLengthMax:    serverService.config.HttpServer.Limits.EmailLengthMax,
+			CidMin:            serverService.config.HttpServer.Limits.CidMin,
+			CidMax:            serverService.config.HttpServer.Limits.CidMax,
+			SimulatorServer:   serverService.config.General.SimulatorServer,
 		},
 		Facilities: &fsd.Facilities,
 		Ratings:    &fsd.Ratings,

@@ -34,8 +34,7 @@ func (dc *DBCloseCallback) Invoke(ctx context.Context) error {
 	return err
 }
 
-func ConnectDatabase() error {
-	config, _ = c.GetConfig()
+func ConnectDatabase(config *c.Config) error {
 	queryTimeout = config.Database.QueryDuration
 
 	connection := config.Database.GetConnection()
@@ -56,7 +55,7 @@ func ConnectDatabase() error {
 	}
 	database = db
 
-	if err = db.Migrator().AutoMigrate(&User{}, &FlightPlan{}, &History{}, &Activity{}, &ActivityATC{}, &ActivityPilot{}); err != nil {
+	if err = db.Migrator().AutoMigrate(&User{}, &FlightPlan{}, &History{}, &Activity{}, &ActivityATC{}, &ActivityPilot{}, &ActivityFacility{}); err != nil {
 		return Errorf("error occured while migrating database: %v", err)
 	}
 

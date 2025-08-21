@@ -41,13 +41,20 @@ func (user *User) NewActivity(title string, imageUrl string, activeTime time.Tim
 	}
 }
 
-func (ac *Activity) NewActivityAtc(rating int, callsign string, frequency float64) *ActivityATC {
-	return &ActivityATC{
+func (ac *Activity) NewActivityFacility(rating int, callsign string, frequency float64) *ActivityFacility {
+	return &ActivityFacility{
 		ActivityId: ac.ID,
-		Cid:        0,
 		MinRating:  rating,
 		Callsign:   callsign,
 		Frequency:  fmt.Sprintf("%.3f", frequency),
+	}
+}
+
+func (ac *Activity) NewActivityAtc(facility *ActivityFacility) *ActivityATC {
+	return &ActivityATC{
+		ActivityId: ac.ID,
+		FacilityId: facility.ID,
+		Cid:        0,
 	}
 }
 
@@ -61,12 +68,41 @@ func (ac *Activity) NewActivityPilot(user *User, callsign string, aircraftType s
 	}
 }
 
+func GetActivities(startDay, endDay time.Time) ([]*Activity, error) {
+	activities := make([]*Activity, 0)
+
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+
+	err := database.WithContext(ctx).Where("active_time between ? and ?", startDay, endDay).Find(&activities).Error
+
+	return activities, err
+}
+
+func GetActivityById(id uint) (*Activity, error) {
+	activity := &Activity{}
+
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+
+	err := database.WithContext(ctx).
+		Preload("Facilities").
+		Preload("Pilots").
+		Preload("Controllers").
+		Where("id = ?", id).
+		First(&activity).
+		Error
+
+	return activity, err
+}
+
 func (ac *Activity) Save() error {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).Save(ac).Error
-	return err
+	return database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.WithContext(ctx).Save(ac).Error
+	})
 }
 
 func (ac *Activity) Delete() error {

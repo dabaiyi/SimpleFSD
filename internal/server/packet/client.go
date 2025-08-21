@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	logger "github.com/half-nothing/fsd-server/internal/config"
+	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/server/database"
 	. "github.com/half-nothing/fsd-server/internal/server/defination/fsd"
+	"github.com/half-nothing/fsd-server/internal/utils"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -28,26 +29,29 @@ type Client struct {
 	altitude       int
 	groundSpeed    int
 	frequency      int
+	pbh            uint32
 	visualRange    float64
 	flightPlan     *database.FlightPlan
 	atisInfo       []string
 	history        *database.History
+	config         *c.Config
+	clientManager  ClientManagerInterface
 	disconnect     atomic.Bool
 	motdBytes      []byte
 	reconnectTimer *time.Timer
 	lock           sync.RWMutex
 }
 
-func NewClient(callsign string, rating Rating, protocol int, realName string, socket ConnectionHandlerInterface, isAtc bool) *Client {
+func (cm *ClientManager) NewClient(callsign string, rating Rating, protocol int, realName string, socket ConnectionHandlerInterface, isAtc bool) ClientInterface {
 	socket.SetCallsign(callsign)
 	var flightPlan *database.FlightPlan = nil
-	if !isAtc && !config.Server.General.SimulatorServer {
+	if !isAtc && !cm.config.Server.General.SimulatorServer {
 		var err error
 		flightPlan, err = database.GetFlightPlan(socket.User().Cid)
 		if errors.Is(err, database.ErrFlightPlanNotFound) {
-			logger.WarnF("No flight plan found for %s(%d)", callsign, socket.User().Cid)
+			c.WarnF("No flight plan found for %s(%d)", callsign, socket.User().Cid)
 		} else if err != nil {
-			logger.WarnF("Fail to get flight plan for %s(%d): %v", callsign, socket.User().Cid, err)
+			c.WarnF("Fail to get flight plan for %s(%d): %v", callsign, socket.User().Cid, err)
 		}
 	}
 	return &Client{
@@ -70,191 +74,194 @@ func NewClient(callsign string, rating Rating, protocol int, realName string, so
 		atisInfo:       make([]string, 0, 4),
 		history:        database.NewHistory(socket.User().Cid, callsign, isAtc),
 		motdBytes:      nil,
+		config:         cm.config,
+		clientManager:  cm,
 		disconnect:     atomic.Bool{},
 		reconnectTimer: nil,
 		lock:           sync.RWMutex{},
 	}
 }
 
-func (c *Client) Disconnected() bool {
-	return c.disconnect.Load()
+func (client *Client) Disconnected() bool {
+	return client.disconnect.Load()
 }
 
-func (c *Client) Delete() {
-	if c.disconnect.Load() {
-		c.lock.Lock()
-		defer c.lock.Unlock()
-		logger.InfoF("[%s](%s) client session deleted", c.socket.ConnId(), c.callsign)
+func (client *Client) Delete() {
+	if client.disconnect.Load() {
+		client.lock.Lock()
+		defer client.lock.Unlock()
+		c.InfoF("[%s](%s) client session deleted", client.socket.ConnId(), client.callsign)
 
-		if c.reconnectTimer != nil {
-			c.reconnectTimer.Stop()
-			c.reconnectTimer = nil
+		if client.reconnectTimer != nil {
+			client.reconnectTimer.Stop()
+			client.reconnectTimer = nil
 		}
 
-		if c.isAtc || !config.Server.General.SimulatorServer {
-			if err := c.history.End(); err != nil {
-				logger.ErrorF("[%s](%s) Failed to end history: %v", c.socket.ConnId(), c.callsign, err)
+		if client.isAtc || !client.config.Server.General.SimulatorServer {
+			if err := client.history.End(); err != nil {
+				c.ErrorF("[%s](%s) Failed to end history: %v", client.socket.ConnId(), client.callsign, err)
 			}
 		}
 
-		if c.isAtc {
-			if err := c.user.AddAtcTime(c.history.OnlineTime); err != nil {
-				logger.ErrorF("[%s](%s) Failed to add ATC time: %v", c.socket.ConnId(), c.callsign, err)
+		if client.isAtc {
+			if err := client.user.AddAtcTime(client.history.OnlineTime); err != nil {
+				c.ErrorF("[%s](%s) Failed to add ATC time: %v", client.socket.ConnId(), client.callsign, err)
 			}
-		} else if !config.Server.General.SimulatorServer {
+		} else if !client.config.Server.General.SimulatorServer {
 			// 如果不是模拟机服务器, 则写入机组连线时长
-			if err := c.user.AddPilotTime(c.history.OnlineTime); err != nil {
-				logger.ErrorF("[%s](%s) Failed to add pilot time: %v", c.socket.ConnId(), c.callsign, err)
+			if err := client.user.AddPilotTime(client.history.OnlineTime); err != nil {
+				c.ErrorF("[%s](%s) Failed to add pilot time: %v", client.socket.ConnId(), client.callsign, err)
 			}
 		}
 
-		if !clientManager.DeleteClient(c.callsign) {
-			logger.ErrorF("[%s](%s) Failed to delete from client manager", c.socket.ConnId(), c.callsign)
+		if !client.clientManager.DeleteClient(client.callsign) {
+			c.ErrorF("[%s](%s) Failed to delete from client manager", client.socket.ConnId(), client.callsign)
 		}
 	}
 }
 
-func (c *Client) Reconnect(socket ConnectionHandlerInterface) bool {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (client *Client) Reconnect(socket ConnectionHandlerInterface) bool {
+	client.lock.Lock()
+	defer client.lock.Unlock()
 
-	if !c.disconnect.Load() {
+	if !client.disconnect.Load() {
 		return false
 	}
 
-	logger.InfoF("[%s](%s) client reconnected", c.socket.ConnId, c.callsign)
+	c.InfoF("[%s](%s) client reconnected", client.socket.ConnId, client.callsign)
 
-	if c.reconnectTimer != nil {
-		c.reconnectTimer.Stop()
-		c.reconnectTimer = nil
+	if client.reconnectTimer != nil {
+		client.reconnectTimer.Stop()
+		client.reconnectTimer = nil
 	}
 
-	c.ClearAtcAtisInfo()
-	c.disconnect.Store(false)
-	c.socket = socket
-	socket.SetCallsign(c.callsign)
+	client.ClearAtcAtisInfo()
+	client.disconnect.Store(false)
+	client.socket = socket
+	socket.SetCallsign(client.callsign)
 	return true
 }
 
-func (c *Client) MarkedDisconnect(immediate bool) {
-	c.lock.Lock()
+func (client *Client) MarkedDisconnect(immediate bool) {
+	client.lock.Lock()
 	defer func() {
-		c.lock.Unlock()
+		client.lock.Unlock()
 		if immediate {
-			c.Delete()
+			client.Delete()
 		}
 	}()
 
-	if !c.disconnect.CompareAndSwap(false, true) {
+	if !client.disconnect.CompareAndSwap(false, true) {
 		return
 	}
 
 	// 关闭连接
-	if c.socket.Conn() != nil {
-		_ = c.socket.Conn().Close()
+	if client.socket.Conn() != nil {
+		_ = client.socket.Conn().Close()
 	}
 
 	// 取消之前的定时器
-	if c.reconnectTimer != nil {
-		c.reconnectTimer.Stop()
+	if client.reconnectTimer != nil {
+		client.reconnectTimer.Stop()
 	}
 
 	if immediate {
 		return
 	}
 
-	c.reconnectTimer = time.AfterFunc(config.Server.FSDServer.SessionCleanDuration, c.Delete)
-	logger.InfoF("[%s](%s) client disconnected, reconnect window: %v", c.socket.ConnId,
-		c.callsign, config.Server.FSDServer.SessionCleanDuration)
+	client.reconnectTimer = time.AfterFunc(client.config.Server.FSDServer.SessionCleanDuration, client.Delete)
+	c.InfoF("[%s](%s) client disconnected, reconnect window: %v", client.socket.ConnId(),
+		client.callsign, client.config.Server.FSDServer.SessionCleanDuration)
 }
 
-func (c *Client) UpsertFlightPlan(flightPlanData []string) error {
-	if c.flightPlan == nil {
-		flightPlan, err := database.UpsertFlightPlan(c.user, c.callsign, flightPlanData)
+func (client *Client) UpsertFlightPlan(flightPlanData []string) error {
+	if client.flightPlan == nil {
+		flightPlan, err := database.UpsertFlightPlan(client.user, client.callsign, flightPlanData)
 		if err != nil {
 			return err
 		}
-		c.flightPlan = flightPlan
+		client.flightPlan = flightPlan
 		return nil
 	}
 	// 如果是模拟机服务器, 只创建就行
-	if config.Server.General.SimulatorServer {
+	if client.config.Server.General.SimulatorServer {
 		return nil
 	}
-	if c.flightPlan.Locked {
+	if client.flightPlan.Locked {
 		departureAirport := flightPlanData[5]
 		arrivalAirport := flightPlanData[9]
-		if c.flightPlan.DepartureAirport != departureAirport || c.flightPlan.ArrivalAirport != arrivalAirport {
-			c.flightPlan.Locked = false
+		if client.flightPlan.DepartureAirport != departureAirport || client.flightPlan.ArrivalAirport != arrivalAirport {
+			client.flightPlan.Locked = false
 		}
 	}
-	err := c.flightPlan.UpdateFlightPlan(flightPlanData, false)
+	err := client.flightPlan.UpdateFlightPlan(flightPlanData, false)
 	return err
 }
 
-func (c *Client) SetPosition(index int, lat float64, lon float64) error {
+func (client *Client) SetPosition(index int, lat float64, lon float64) error {
 	if index >= 4 {
 		return errors.New("position index out of range")
 	}
-	c.position[index].Latitude = lat
-	c.position[index].Longitude = lon
+	client.position[index].Latitude = lat
+	client.position[index].Longitude = lon
 	return nil
 }
 
-func (c *Client) UpdatePilotPos(transponder int, lat float64, lon float64, alt int, groundSpeed int) {
-	_ = c.SetPosition(0, lat, lon)
-	c.transponder = fmt.Sprintf("%04d", transponder)
-	c.altitude = alt
-	c.groundSpeed = groundSpeed
+func (client *Client) UpdatePilotPos(transponder int, lat float64, lon float64, alt int, groundSpeed int, pbh uint32) {
+	_ = client.SetPosition(0, lat, lon)
+	client.transponder = fmt.Sprintf("%04d", transponder)
+	client.altitude = alt
+	client.groundSpeed = groundSpeed
+	client.pbh = pbh
 }
 
-func (c *Client) UpdateAtcPos(frequency int, facility Facility, visualRange float64, lat float64, lon float64) {
-	_ = c.SetPosition(0, lat, lon)
-	c.frequency = frequency
-	c.facility = facility
-	c.visualRange = visualRange
+func (client *Client) UpdateAtcPos(frequency int, facility Facility, visualRange float64, lat float64, lon float64) {
+	_ = client.SetPosition(0, lat, lon)
+	client.frequency = frequency
+	client.facility = facility
+	client.visualRange = visualRange
 }
 
-func (c *Client) UpdateAtcVisPoint(visIndex int, lat float64, lon float64) error {
+func (client *Client) UpdateAtcVisPoint(visIndex int, lat float64, lon float64) error {
 	if visIndex < 0 || visIndex > 2 {
 		return errors.New("visIndex out of range [0,2]")
 	}
-	return c.SetPosition(visIndex+1, lat, lon)
+	return client.SetPosition(visIndex+1, lat, lon)
 }
 
-func (c *Client) ClearAtcAtisInfo() {
-	c.atisInfo = c.atisInfo[:0]
+func (client *Client) ClearAtcAtisInfo() {
+	client.atisInfo = client.atisInfo[:0]
 }
 
-func (c *Client) AddAtcAtisInfo(atisInfo string) {
-	c.atisInfo = append(c.atisInfo, atisInfo)
+func (client *Client) AddAtcAtisInfo(atisInfo string) {
+	client.atisInfo = append(client.atisInfo, atisInfo)
 }
 
-func (c *Client) SendError(result *Result) {
+func (client *Client) SendError(result *Result) {
 	if result.Success {
 		return
 	}
 
-	packet := makePacket(Error, "server", c.callsign, fmt.Sprintf("%03d", result.Errno.Index()), result.Env, result.Errno.String())
-	c.SendLine(packet)
+	packet := makePacket(Error, "server", client.callsign, fmt.Sprintf("%03d", result.Errno.Index()), result.Env, result.Errno.String())
+	client.SendLine(packet)
 
 	if result.Fatal {
-		c.socket.SetDisconnected(true)
-		c.disconnect.Store(true)
+		client.socket.SetDisconnected(true)
+		client.disconnect.Store(true)
 		time.AfterFunc(500*time.Millisecond, func() {
-			if !clientManager.DeleteClient(c.callsign) {
-				logger.ErrorF("[%s](%s) Failed to delete from client manager", c.socket.ConnId, c.callsign)
+			if !client.clientManager.DeleteClient(client.callsign) {
+				c.ErrorF("[%s](%s) Failed to delete from client manager", client.socket.ConnId(), client.callsign)
 			}
 		})
 	}
 }
 
-func (c *Client) SendLineWithoutLog(line []byte) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+func (client *Client) SendLineWithoutLog(line []byte) {
+	client.lock.RLock()
+	defer client.lock.RUnlock()
 
-	if c.disconnect.Load() {
-		logger.WarnF("[%s](%s) Attempted send to disconnected client", c.socket.ConnId, c.callsign)
+	if client.disconnect.Load() {
+		c.WarnF("[%s](%s) Attempted send to disconnected client", client.socket.ConnId(), client.callsign)
 		return
 	}
 
@@ -262,92 +269,97 @@ func (c *Client) SendLineWithoutLog(line []byte) {
 		line = append(line, splitSign...)
 	}
 
-	if _, err := c.socket.Conn().Write(line); err != nil {
-		logger.ErrorF("[%s](%s) Failed to send data: %v", c.socket.ConnId, c.callsign, err)
+	if _, err := client.socket.Conn().Write(line); err != nil {
+		c.ErrorF("[%s](%s) Failed to send data: %v", client.socket.ConnId(), client.callsign, err)
 	}
 }
 
-func (c *Client) SendLine(line []byte) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+func (client *Client) SendLine(line []byte) {
+	client.lock.RLock()
+	defer client.lock.RUnlock()
 
-	if c.disconnect.Load() {
-		logger.DebugF("[%s](%s) Attempted send to disconnected client", c.socket.ConnId, c.callsign)
+	if client.disconnect.Load() {
+		c.DebugF("[%s](%s) Attempted send to disconnected client", client.socket.ConnId(), client.callsign)
 		return
 	}
 
 	if !bytes.HasSuffix(line, splitSign) {
-		logger.DebugF("[%s](%s) <- %s", c.socket.ConnId, c.callsign, line)
+		c.DebugF("[%s](%s) <- %s", client.socket.ConnId(), client.callsign, line)
 		line = append(line, splitSign...)
 	} else {
-		logger.DebugF("[%s](%s) <- %s", c.socket.ConnId, c.callsign, line[:len(line)-splitSignLen])
+		c.DebugF("[%s](%s) <- %s", client.socket.ConnId(), client.callsign, line[:len(line)-splitSignLen])
 	}
 
-	if _, err := c.socket.Conn().Write(line); err != nil {
-		logger.WarnF("[%s](%s) Failed to send data: %v", c.socket.ConnId, c.callsign, err)
+	if _, err := client.socket.Conn().Write(line); err != nil {
+		c.WarnF("[%s](%s) Failed to send data: %v", client.socket.ConnId(), client.callsign, err)
 	}
 }
 
-func (c *Client) SendMotd() {
-	if c.motdBytes != nil {
-		c.SendLine(c.motdBytes)
+func (client *Client) SendMotd() {
+	if client.motdBytes != nil {
+		client.SendLine(client.motdBytes)
 		return
 	}
 
-	data := make([][]byte, 0, len(config.Server.FSDServer.Motd)+1)
+	data := make([][]byte, 0, len(client.config.Server.FSDServer.Motd)+1)
 	data = append(data, []byte(fmt.Sprintf("%sserver:%s:Welcome to use %s v%s\r\n",
-		Message, c.callsign, config.Server.FSDServer.FSDName, logger.AppVersion.String())))
+		Message, client.callsign, client.config.Server.FSDServer.FSDName, c.AppVersion.String())))
 
-	for _, message := range config.Server.FSDServer.Motd {
-		data = append(data, makePacket(Message, "server", c.callsign, message))
+	for _, message := range client.config.Server.FSDServer.Motd {
+		data = append(data, makePacket(Message, "server", client.callsign, message))
 	}
 
 	buffer := bytes.Buffer{}
 	for _, msg := range data {
 		buffer.Write(msg)
 	}
-	c.motdBytes = buffer.Bytes()
-	c.SendLine(c.motdBytes)
+	client.motdBytes = buffer.Bytes()
+	client.SendLine(client.motdBytes)
 }
 
-func (c *Client) CheckFacility(facility Facility) bool {
-	return facility.CheckFacility(c.facility)
+func (client *Client) CheckFacility(facility Facility) bool {
+	return facility.CheckFacility(client.facility)
 }
 
-func (c *Client) CheckRating(rating []Rating) bool {
-	return slices.Contains(rating, c.rating)
+func (client *Client) CheckRating(rating []Rating) bool {
+	return slices.Contains(rating, client.rating)
 }
 
-func (c *Client) IsAtc() bool { return c.isAtc }
+func (client *Client) IsAtc() bool { return client.isAtc }
 
-func (c *Client) Callsign() string { return c.callsign }
+func (client *Client) Callsign() string { return client.callsign }
 
-func (c *Client) Rating() Rating { return c.rating }
+func (client *Client) Rating() Rating { return client.rating }
 
-func (c *Client) Facility() Facility { return c.facility }
+func (client *Client) Facility() Facility { return client.facility }
 
-func (c *Client) RealName() string { return c.realName }
+func (client *Client) RealName() string { return client.realName }
 
-func (c *Client) Position() [4]Position { return c.position }
+func (client *Client) Position() [4]Position { return client.position }
 
-func (c *Client) VisualRange() float64 { return c.visualRange }
+func (client *Client) VisualRange() float64 { return client.visualRange }
 
-func (c *Client) SetUser(user *database.User) { c.user = user }
+func (client *Client) SetUser(user *database.User) { client.user = user }
 
-func (c *Client) SetSimType(simType int) { c.simType = simType }
+func (client *Client) SetSimType(simType int) { client.simType = simType }
 
-func (c *Client) FlightPlan() *database.FlightPlan { return c.flightPlan }
+func (client *Client) FlightPlan() *database.FlightPlan { return client.flightPlan }
 
-func (c *Client) User() *database.User { return c.user }
+func (client *Client) User() *database.User { return client.user }
 
-func (c *Client) Frequency() int { return c.frequency }
+func (client *Client) Frequency() int { return client.frequency }
 
-func (c *Client) AtisInfo() []string { return c.atisInfo }
+func (client *Client) AtisInfo() []string { return client.atisInfo }
 
-func (c *Client) History() *database.History { return c.history }
+func (client *Client) History() *database.History { return client.history }
 
-func (c *Client) Transponder() string { return c.transponder }
+func (client *Client) Transponder() string { return client.transponder }
 
-func (c *Client) Altitude() int { return c.altitude }
+func (client *Client) Altitude() int { return client.altitude }
 
-func (c *Client) GroundSpeed() int { return c.groundSpeed }
+func (client *Client) GroundSpeed() int { return client.groundSpeed }
+
+func (client *Client) Heading() int {
+	_, _, heading, _ := utils.UnpackPBH(client.pbh)
+	return int(heading)
+}

@@ -1,8 +1,10 @@
 // Package interfaces
 package interfaces
 
+import "github.com/half-nothing/fsd-server/internal/server/database"
+
 type ClientServiceInterface interface {
-	GetOnlineClient() *ApiResponse[ResponseOnlineClient]
+	GetOnlineClient() *OnlineClients
 	SendMessageToClient(req *RequestSendMessageToClient) *ApiResponse[ResponseSendMessageToClient]
 	KillClient(req *RequestKillClient) *ApiResponse[ResponseKillClient]
 }
@@ -16,15 +18,17 @@ type OnlineGeneral struct {
 }
 
 type OnlinePilot struct {
-	Cid         int     `json:"cid"`
-	Callsign    string  `json:"callsign"`
-	RealName    string  `json:"real_name"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	Transponder string  `json:"transponder"`
-	Altitude    int     `json:"altitude"`
-	GroundSpeed int     `json:"ground_speed"`
-	LogonTime   string  `json:"logon_time"`
+	Cid         int                  `json:"cid"`
+	Callsign    string               `json:"callsign"`
+	RealName    string               `json:"real_name"`
+	Latitude    float64              `json:"latitude"`
+	Longitude   float64              `json:"longitude"`
+	Transponder string               `json:"transponder"`
+	Heading     int                  `json:"heading"`
+	Altitude    int                  `json:"altitude"`
+	GroundSpeed int                  `json:"ground_speed"`
+	FlightPlan  *database.FlightPlan `json:"flight_plan"`
+	LogonTime   string               `json:"logon_time"`
 }
 
 type OnlineController struct {
@@ -39,14 +43,11 @@ type OnlineController struct {
 	AtcInfo   []string `json:"atc_info"`
 	LogonTime string   `json:"logon_time"`
 }
+
 type OnlineClients struct {
 	General     OnlineGeneral       `json:"general"`
 	Pilots      []*OnlinePilot      `json:"pilots"`
 	Controllers []*OnlineController `json:"controllers"`
-}
-
-type ResponseOnlineClient struct {
-	*OnlineClients
 }
 
 type RequestSendMessageToClient struct {
