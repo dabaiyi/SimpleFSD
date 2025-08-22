@@ -1,6 +1,7 @@
 package operation
 
 import (
+	"gorm.io/gorm"
 	"time"
 )
 
@@ -77,32 +78,33 @@ type Activity struct {
 	Pilots           []*ActivityPilot    `gorm:"foreignKey:ActivityId;references:ID" json:"pilots"`
 	CreatedAt        time.Time           `json:"-"`
 	UpdatedAt        time.Time           `json:"-"`
+	DeletedAt        gorm.DeletedAt      `json:"-"`
 }
 
 type ActivityFacility struct {
-	ID         uint        `gorm:"primarykey" json:"id"`
-	ActivityId uint        `gorm:"index;not null" json:"activity_id"`
-	MinRating  int         `gorm:"default:2;not null" json:"min_rating"`
-	Callsign   string      `gorm:"size:16;not null" json:"callsign"`
-	Frequency  string      `gorm:"size:8;not null" json:"frequency"`
-	Controller ActivityATC `gorm:"foreignKey:FacilityId;references:ID" json:"-"`
-	CreatedAt  time.Time   `json:"-"`
-	UpdatedAt  time.Time   `json:"-"`
+	ID         uint         `gorm:"primarykey" json:"id"`
+	ActivityId uint         `gorm:"index;not null" json:"activity_id"`
+	MinRating  int          `gorm:"default:2;not null" json:"min_rating"`
+	Callsign   string       `gorm:"size:16;not null" json:"callsign"`
+	Frequency  string       `gorm:"size:8;not null" json:"frequency"`
+	Controller *ActivityATC `gorm:"foreignKey:FacilityId;references:ID" json:"-"`
+	CreatedAt  time.Time    `json:"-"`
+	UpdatedAt  time.Time    `json:"-"`
 }
 
 type ActivityATC struct {
 	ID         uint      `gorm:"primarykey" json:"id"`
-	ActivityId uint      `gorm:"index;not null" json:"activity_id"`
-	FacilityId uint      `gorm:"index;not null" json:"facility_id"`
-	Cid        uint      `gorm:"index;not null" json:"cid"`
+	ActivityId uint      `gorm:"uniqueIndex:activityController;not null" json:"activity_id"`
+	FacilityId uint      `gorm:"uniqueIndex:activityController;not null" json:"facility_id"`
+	Cid        int       `gorm:"index;not null" json:"cid"`
 	CreatedAt  time.Time `json:"-"`
 	UpdatedAt  time.Time `json:"-"`
 }
 
 type ActivityPilot struct {
 	ID           uint      `gorm:"primarykey" json:"id"`
-	ActivityId   uint      `gorm:"index;not null" json:"activity_id"`
-	Cid          int       `gorm:"index;not null" json:"cid"`
+	ActivityId   uint      `gorm:"uniqueIndex:activityPilot;not null" json:"activity_id"`
+	Cid          int       `gorm:"uniqueIndex:activityPilot;not null" json:"cid"`
 	Callsign     string    `gorm:"size:16;not null" json:"callsign"`
 	AircraftType string    `gorm:"size:8;not null" json:"aircraft_type"`
 	Status       int       `gorm:"default:0;not null" json:"status"`

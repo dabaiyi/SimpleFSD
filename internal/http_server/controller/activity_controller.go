@@ -13,11 +13,12 @@ type ActivityControllerInterface interface {
 	GetActivityInfo(ctx echo.Context) error
 	AddActivity(ctx echo.Context) error
 	DeleteActivity(ctx echo.Context) error
-	EditActivity(ctx echo.Context) error
 	ControllerJoin(ctx echo.Context) error
 	ControllerLeave(ctx echo.Context) error
 	PilotJoin(ctx echo.Context) error
 	PilotLeave(ctx echo.Context) error
+	EditActivity(ctx echo.Context) error
+	EditActivityStatus(ctx echo.Context) error
 	EditPilotStatus(ctx echo.Context) error
 }
 
@@ -62,36 +63,110 @@ func (controller ActivityController) AddActivity(ctx echo.Context) error {
 }
 
 func (controller ActivityController) DeleteActivity(ctx echo.Context) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (controller ActivityController) EditActivity(ctx echo.Context) error {
-	//TODO implement me
-	panic("implement me")
+	data := &RequestDeleteActivity{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	return controller.activityService.DeleteActivity(data).Response(ctx)
 }
 
 func (controller ActivityController) ControllerJoin(ctx echo.Context) error {
-	//TODO implement me
-	panic("implement me")
+	data := &RequestControllerJoin{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	data.Rating = claim.Rating
+	return controller.activityService.ControllerJoin(data).Response(ctx)
 }
 
 func (controller ActivityController) ControllerLeave(ctx echo.Context) error {
-	//TODO implement me
-	panic("implement me")
+	data := &RequestControllerLeave{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	data.Cid = claim.Cid
+	return controller.activityService.ControllerLeave(data).Response(ctx)
 }
 
 func (controller ActivityController) PilotJoin(ctx echo.Context) error {
-	//TODO implement me
-	panic("implement me")
+	data := &RequestPilotJoin{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	data.Cid = claim.Cid
+	return controller.activityService.PilotJoin(data).Response(ctx)
 }
 
 func (controller ActivityController) PilotLeave(ctx echo.Context) error {
-	//TODO implement me
-	panic("implement me")
+	data := &RequestPilotLeave{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	data.Cid = claim.Cid
+	return controller.activityService.PilotLeave(data).Response(ctx)
+}
+
+func (controller ActivityController) EditActivity(ctx echo.Context) error {
+	data := &RequestEditActivity{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	return controller.activityService.EditActivity(data).Response(ctx)
+}
+
+func (controller ActivityController) EditActivityStatus(ctx echo.Context) error {
+	data := &RequestEditActivityStatus{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	return controller.activityService.EditActivityStatus(data).Response(ctx)
 }
 
 func (controller ActivityController) EditPilotStatus(ctx echo.Context) error {
-	//TODO implement me
-	panic("implement me")
+	data := &RequestEditPilotStatus{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	data.Cid = claim.Cid
+	return controller.activityService.EditPilotStatus(data).Response(ctx)
 }

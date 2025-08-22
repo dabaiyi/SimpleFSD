@@ -8,24 +8,27 @@ import (
 	. "github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	"github.com/half-nothing/fsd-server/internal/utils"
 	"gorm.io/gorm"
+	"time"
 )
 
 type FlightPlanOperation struct {
-	config *c.OtherConfig
-	db     *gorm.DB
+	config       *c.OtherConfig
+	db           *gorm.DB
+	queryTimeout time.Duration
 }
 
-func NewFlightPlanOperation(config *c.OtherConfig, db *gorm.DB) *FlightPlanOperation {
-	return &FlightPlanOperation{config: config, db: db}
+func NewFlightPlanOperation(db *gorm.DB, queryTimeout time.Duration, config *c.OtherConfig) *FlightPlanOperation {
+	return &FlightPlanOperation{config: config, db: db, queryTimeout: queryTimeout}
 }
 
 func (flightPlanOperation *FlightPlanOperation) GetFlightPlanByCid(cid int) (flightPlan *FlightPlan, err error) {
 	if flightPlanOperation.config.SimulatorServer {
 		return nil, ErrSimulatorServer
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	flightPlan = &FlightPlan{}
+	ctx, cancel := context.WithTimeout(context.Background(), flightPlanOperation.queryTimeout)
 	defer cancel()
-	err = flightPlanOperation.db.WithContext(ctx).Where("cid = ?", cid).First(&flightPlan).Error
+	err = flightPlanOperation.db.WithContext(ctx).Where("cid = ?", cid).First(flightPlan).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrFlightPlanNotFound
@@ -54,7 +57,7 @@ func (flightPlanOperation *FlightPlanOperation) UpsertFlightPlan(user *User, cal
 	if flightPlanOperation.config.SimulatorServer {
 		return flightPlan, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), flightPlanOperation.queryTimeout)
 	defer cancel()
 	err = flightPlanOperation.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.WithContext(ctx).Save(flightPlan).Error; errors.Is(err, gorm.ErrDuplicatedKey) {
@@ -100,7 +103,7 @@ func (flightPlanOperation *FlightPlanOperation) UpdateFlightPlan(flightPlan *Fli
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), flightPlanOperation.queryTimeout)
 	defer cancel()
 
 	return flightPlanOperation.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -117,7 +120,7 @@ func (flightPlanOperation *FlightPlanOperation) UpdateCruiseAltitude(flightPlan 
 
 	flightPlan.Locked = true
 
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), flightPlanOperation.queryTimeout)
 	defer cancel()
 
 	result := flightPlanOperation.db.WithContext(ctx).Model(flightPlan).Updates(map[string]interface{}{

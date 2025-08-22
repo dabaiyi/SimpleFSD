@@ -3,8 +3,7 @@ package service
 
 import (
 	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/fsd_server/interfaces/service"
-	fsd2 "github.com/half-nothing/fsd-server/internal/interfaces/fsd"
+	"github.com/half-nothing/fsd-server/internal/interfaces/fsd"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
 	"github.com/half-nothing/fsd-server/internal/utils"
 )
@@ -35,8 +34,8 @@ func (serverService *ServerService) getServerConfig() *ServerConfig {
 			CidMax:            serverService.config.HttpServer.Limits.CidMax,
 			SimulatorServer:   serverService.config.General.SimulatorServer,
 		},
-		Facilities: &fsd2.Facilities,
-		Ratings:    &fsd2.Ratings,
+		Facilities: &fsd.Facilities,
+		Ratings:    &fsd.Ratings,
 	}
 }
 

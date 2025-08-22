@@ -2,6 +2,7 @@
 package service
 
 import (
+	"github.com/half-nothing/fsd-server/internal/interfaces/fsd"
 	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
 )
 
@@ -29,6 +30,7 @@ type OnlinePilot struct {
 	Heading     int                   `json:"heading"`
 	Altitude    int                   `json:"altitude"`
 	GroundSpeed int                   `json:"ground_speed"`
+	Paths       []*fsd.PilotPath      `json:"paths"`
 	FlightPlan  *operation.FlightPlan `json:"flight_plan"`
 	LogonTime   string                `json:"logon_time"`
 }

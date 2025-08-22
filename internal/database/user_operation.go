@@ -4,126 +4,103 @@ import (
 	"context"
 	"errors"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/fsd_server/interfaces/operation"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"time"
 )
 
 type UserOperation struct {
-	config *c.OtherConfig
-	db     *gorm.DB
+	config       *c.OtherConfig
+	db           *gorm.DB
+	queryTimeout time.Duration
 }
 
-func NewUserOperation(config *c.OtherConfig, db *gorm.DB) *UserOperation {
-	return &UserOperation{config: config, db: db}
+func NewUserOperation(db *gorm.DB, queryTimeout time.Duration, config *c.OtherConfig) *UserOperation {
+	return &UserOperation{config: config, db: db, queryTimeout: queryTimeout}
 }
 
-func (userOperation *UserOperation) GetUserByUid(uid uint) (*User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+func (userOperation *UserOperation) GetUserByUid(uid uint) (user *User, err error) {
+	user = &User{}
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
-	user := User{}
-	err := userOperation.db.WithContext(ctx).
+	err = userOperation.db.WithContext(ctx).
 		Where("id = ?", uid).
-		First(&user).Error
-
+		First(user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrUserNotFound
+		err = ErrUserNotFound
 	}
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return
 }
 
-func (userOperation *UserOperation) GetUserByCid(cid uint) (*User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+func (userOperation *UserOperation) GetUserByCid(cid uint) (user *User, err error) {
+	user = &User{}
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
-	user := User{}
-	err := userOperation.db.WithContext(ctx).
+	err = userOperation.db.WithContext(ctx).
 		Where("cid = ?", cid).
-		First(&user).Error
-
+		First(user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrUserNotFound
+		err = ErrUserNotFound
 	}
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
-
+	return
 }
 
-func (userOperation *UserOperation) GetUserByUsername(username string) (*User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+func (userOperation *UserOperation) GetUserByUsername(username string) (user *User, err error) {
+	user = &User{}
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
-	user := User{}
-	err := userOperation.db.WithContext(ctx).
+	err = userOperation.db.WithContext(ctx).
 		Where("username = ?", username).
-		First(&user).Error
-
+		First(user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrUserNotFound
+		err = ErrUserNotFound
 	}
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return
 }
 
-func (userOperation *UserOperation) GetUserByEmail(email string) (*User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+func (userOperation *UserOperation) GetUserByEmail(email string) (user *User, err error) {
+	user = &User{}
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
-	user := User{}
-	err := userOperation.db.WithContext(ctx).
+	err = userOperation.db.WithContext(ctx).
 		Where("email = ?", email).
-		First(&user).Error
-
+		First(user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrUserNotFound
+		err = ErrUserNotFound
 	}
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return user, nil
 }
 
-func (userOperation *UserOperation) GetUserByUsernameOrEmail(ident string) (*User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+func (userOperation *UserOperation) GetUserByUsernameOrEmail(ident string) (user *User, err error) {
+	user = &User{}
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
-	user := User{}
-	err := userOperation.db.WithContext(ctx).
+	err = userOperation.db.WithContext(ctx).
 		Where("username = ? OR email = ?", ident, ident).
-		First(&user).Error
-
+		First(user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrUserNotFound
+		err = ErrUserNotFound
 	}
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return user, nil
 }
 
-func (userOperation *UserOperation) GetUsers(page, pageSize int) ([]*User, int64, error) {
-	var total int64
-	users := make([]*User, 0, pageSize)
-
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+func (userOperation *UserOperation) GetUsers(page, pageSize int) (users []*User, total int64, err error) {
+	users = make([]*User, 0, pageSize)
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
-
 	userOperation.db.WithContext(ctx).Model(&User{}).Select("id").Count(&total)
-	err := userOperation.db.WithContext(ctx).Offset((page - 1) * pageSize).Limit(pageSize).Find(&users).Error
-
-	return users, total, err
+	err = userOperation.db.WithContext(ctx).Offset((page - 1) * pageSize).Limit(pageSize).Find(&users).Error
+	return
 }
 
-func (userOperation *UserOperation) NewUser(username string, email string, cid int, password string) (*User, error) {
+func (userOperation *UserOperation) NewUser(username string, email string, cid int, password string) (user *User, err error) {
 	encodePassword, err := bcrypt.GenerateFromPassword([]byte(password), userOperation.config.BcryptCost)
 	if err != nil {
 		return nil, ErrPasswordEncode
 	}
-	return &User{
+	user = &User{
 		Username:       username,
 		Email:          email,
 		Cid:            cid,
@@ -133,11 +110,12 @@ func (userOperation *UserOperation) NewUser(username string, email string, cid i
 		Permission:     0,
 		TotalPilotTime: 0,
 		TotalAtcTime:   0,
-	}, nil
+	}
+	return
 }
 
 func (userOperation *UserOperation) AddUser(user *User) error {
-	return userOperation.db.Transaction(func(tx *gorm.DB) error {
+	return userOperation.db.Clauses(clause.Locking{Strength: "UPDATE"}).Transaction(func(tx *gorm.DB) error {
 		taken, err := userOperation.IsUserIdentifierTaken(tx, user.Cid, user.Username, user.Email)
 		if err != nil {
 			return ErrIdentifierCheck
@@ -147,44 +125,44 @@ func (userOperation *UserOperation) AddUser(user *User) error {
 			return ErrIdentifierTaken
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 		defer cancel()
 		return tx.WithContext(ctx).Create(user).Error
 	})
 }
 
 func (userOperation *UserOperation) UpdateUserAtcTime(user *User, seconds int) error {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
 	return userOperation.db.WithContext(ctx).Model(user).Update("total_atc_time", gorm.Expr("total_atc_time + ?", seconds)).Error
 }
 
 func (userOperation *UserOperation) UpdateUserPilotTime(user *User, seconds int) error {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
 	return userOperation.db.WithContext(ctx).Model(user).Update("total_pilot_time", gorm.Expr("total_pilot_time + ?", seconds)).Error
 }
 
 func (userOperation *UserOperation) UpdateUserRating(user *User, rating int) error {
 	user.Rating = rating
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
-	return userOperation.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return userOperation.db.Clauses(clause.Locking{Strength: "UPDATE"}).WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return tx.Model(user).Update("rating", rating).Error
 	})
 }
 
-func (userOperation *UserOperation) UpdatePermission(user *User, permission Permission) error {
+func (userOperation *UserOperation) UpdateUserPermission(user *User, permission Permission) error {
 	user.Permission = int64(permission)
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
-	return userOperation.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return userOperation.db.Clauses(clause.Locking{Strength: "UPDATE"}).WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return tx.Model(user).Update("permission", int64(permission)).Error
 	})
 }
 
 func (userOperation *UserOperation) UpdateUserInfo(user *User, info map[string]interface{}) error {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
 	return userOperation.db.WithContext(ctx).Model(user).Updates(info).Error
 }
@@ -193,7 +171,7 @@ func (userOperation *UserOperation) UpdateUserPassword(user *User, originalPassw
 	if !userOperation.VerifyUserPassword(user, originalPassword) {
 		return nil, ErrOldPassword
 	}
-	encodePassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), config.Server.General.BcryptCost)
+	encodePassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), userOperation.config.BcryptCost)
 	if err != nil {
 		return nil, ErrPasswordEncode
 	}
@@ -202,7 +180,7 @@ func (userOperation *UserOperation) UpdateUserPassword(user *User, originalPassw
 }
 
 func (userOperation *UserOperation) SaveUser(user *User) error {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
 
 	err := userOperation.db.WithContext(ctx).Save(user).Error
@@ -215,7 +193,10 @@ func (userOperation *UserOperation) VerifyUserPassword(user *User, password stri
 }
 
 func (userOperation *UserOperation) IsUserIdentifierTaken(tx *gorm.DB, cid int, username, email string) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	if tx == nil {
+		tx = userOperation.db
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
 
 	var count int64

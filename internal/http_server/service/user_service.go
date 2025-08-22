@@ -4,23 +4,23 @@ package service
 import (
 	"errors"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	"github.com/half-nothing/fsd-server/internal/fsd_server/database"
-	. "github.com/half-nothing/fsd-server/internal/fsd_server/interfaces/service"
 	"github.com/half-nothing/fsd-server/internal/interfaces/fsd"
-	database3 "github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
 	"github.com/half-nothing/fsd-server/internal/utils"
 )
 
 type UserService struct {
-	emailService EmailServiceInterface
-	config       *c.HttpServerConfig
+	emailService  EmailServiceInterface
+	config        *c.HttpServerConfig
+	userOperation operation.UserOperationInterface
 }
 
-func NewUserService(emailService EmailServiceInterface, config *c.HttpServerConfig) *UserService {
+func NewUserService(emailService EmailServiceInterface, config *c.HttpServerConfig, userOperation operation.UserOperationInterface) *UserService {
 	return &UserService{
-		emailService: emailService,
-		config:       config,
+		emailService:  emailService,
+		config:        config,
+		userOperation: userOperation,
 	}
 }
 
@@ -67,12 +67,12 @@ func (userService *UserService) UserRegister(req *RequestUserRegister) *ApiRespo
 	if err := cidValidator.CheckInt(req.Cid); err != nil {
 		return NewApiResponse[ResponseUserRegister](err, Unsatisfied, nil)
 	}
-	user, err := database.NewUser(req.Username, req.Email, req.Cid, req.Password)
+	user, err := userService.userOperation.NewUser(req.Username, req.Email, req.Cid, req.Password)
 	if err != nil {
 		return NewApiResponse[ResponseUserRegister](&ErrRegisterFail, Unsatisfied, nil)
 	}
 	if _, res := CallDBFuncAndCheckError[interface{}, ResponseUserRegister](func() (*interface{}, error) {
-		return nil, user.AddUser()
+		return nil, userService.userOperation.AddUser(user)
 	}); res != nil {
 		return res
 	}
@@ -94,16 +94,16 @@ func (userService *UserService) UserLogin(req *RequestUserLogin) *ApiResponse[Re
 	if req.Username == "" || req.Password == "" {
 		return NewApiResponse[ResponseUserLogin](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	userId := database.StringUserId(req.Username)
+	userId := operation.StringUserId(req.Username)
 
-	user, res := CallDBFuncAndCheckError[database3.User, ResponseUserLogin](func() (*database3.User, error) {
-		return userId.GetUser()
+	user, res := CallDBFuncAndCheckError[operation.User, ResponseUserLogin](func() (*operation.User, error) {
+		return userId.GetUser(userService.userOperation)
 	})
 	if res != nil {
 		return res
 	}
 
-	if pass := user.VerifyPassword(req.Password); pass {
+	if pass := userService.userOperation.VerifyUserPassword(user, req.Password); pass {
 		token := NewClaims(userService.config.JWT, user, false)
 		flushToken := NewClaims(userService.config.JWT, user, true)
 		return NewApiResponse(&SuccessLogin, Unsatisfied, &ResponseUserLogin{
@@ -125,7 +125,7 @@ func (userService *UserService) CheckAvailability(req *RequestUserAvailability) 
 	if req.Username == "" && req.Email == "" && req.Cid == "" {
 		return NewApiResponse[ResponseUserAvailability](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	exist, _ := database.IsUserIdentifierTaken(utils.StrToInt(req.Cid, 0), req.Username, req.Email)
+	exist, _ := userService.userOperation.IsUserIdentifierTaken(nil, utils.StrToInt(req.Cid, 0), req.Username, req.Email)
 	data := ResponseUserAvailability(!exist)
 	if exist {
 		return NewApiResponse(&NameNotAvailability, Unsatisfied, &data)
@@ -138,7 +138,7 @@ var (
 )
 
 func (userService *UserService) GetCurrentProfile(req *RequestUserCurrentProfile) *ApiResponse[ResponseUserCurrentProfile] {
-	if user, err := database.GetUserById(req.Uid); errors.Is(err, database.ErrUserNotFound) {
+	if user, err := userService.userOperation.GetUserByUid(req.Uid); errors.Is(err, operation.ErrUserNotFound) {
 		return NewApiResponse[ResponseUserCurrentProfile](&ErrUserNotFound, Unsatisfied, nil)
 	} else if err != nil {
 		return NewApiResponse[ResponseUserCurrentProfile](&ErrDatabaseFail, Unsatisfied, nil)
@@ -162,7 +162,7 @@ func checkQQ(qq int) *ApiStatus {
 	return &ErrQQInvalid
 }
 
-func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfile, skipEmailVerify bool) (*ApiStatus, *database3.User) {
+func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfile, skipEmailVerify bool) (*ApiStatus, *operation.User) {
 	if req.Username == "" && req.Email == "" && req.QQ <= 0 && req.OriginPassword == "" && req.NewPassword == "" {
 		return &ErrIllegalParam, nil
 	}
@@ -200,8 +200,8 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 		}
 	}
 
-	user, err := database.GetUserById(req.ID)
-	if errors.Is(err, database.ErrUserNotFound) {
+	user, err := userService.userOperation.GetUserByUid(req.ID)
+	if errors.Is(err, operation.ErrUserNotFound) {
 		return &ErrUserNotFound, nil
 	} else if err != nil {
 		return &ErrDatabaseFail, nil
@@ -210,7 +210,7 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 	updateInfo := make(map[string]interface{})
 
 	if req.Username != "" || req.Email != "" {
-		exist, _ := database.IsUserIdentifierTaken(0, req.Username, req.Email)
+		exist, _ := userService.userOperation.IsUserIdentifierTaken(nil, 0, req.Username, req.Email)
 		if exist {
 			return &ErrIdentifierTaken, nil
 		}
@@ -229,10 +229,10 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 	}
 
 	if req.OriginPassword != "" {
-		password, err := user.UpdatePassword(req.OriginPassword, req.NewPassword)
-		if errors.Is(err, database.ErrUserNotFound) {
+		password, err := userService.userOperation.UpdateUserPassword(user, req.OriginPassword, req.NewPassword)
+		if errors.Is(err, operation.ErrUserNotFound) {
 			return &ErrUserNotFound, nil
-		} else if errors.Is(err, database.ErrOldPassword) {
+		} else if errors.Is(err, operation.ErrOldPassword) {
 			return &ErrOriginPassword, nil
 		} else if err != nil {
 			return &ErrDatabaseFail, nil
@@ -240,8 +240,8 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 		updateInfo["password"] = password
 	}
 
-	if err := user.UpdateInfo(updateInfo); err != nil {
-		if errors.Is(err, database.ErrUserNotFound) {
+	if err := userService.userOperation.UpdateUserInfo(user, updateInfo); err != nil {
+		if errors.Is(err, operation.ErrUserNotFound) {
 			return &ErrUserNotFound, nil
 		} else {
 			return &ErrDatabaseFail, nil
@@ -270,12 +270,12 @@ func (userService *UserService) GetUserProfile(req *RequestUserProfile) *ApiResp
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseUserProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := database3.Permission(req.Permission)
-	if !permission.HasPermission(database3.UserGetProfile) {
+	permission := operation.Permission(req.Permission)
+	if !permission.HasPermission(operation.UserGetProfile) {
 		return NewApiResponse[ResponseUserProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
-	user, res := CallDBFuncAndCheckError[database3.User, ResponseUserProfile](func() (*database3.User, error) {
-		return database.GetUserById(req.TargetUid)
+	user, res := CallDBFuncAndCheckError[operation.User, ResponseUserProfile](func() (*operation.User, error) {
+		return userService.userOperation.GetUserByUid(req.TargetUid)
 	})
 	if res != nil {
 		return res
@@ -291,8 +291,8 @@ func (userService *UserService) EditUserProfile(req *RequestUserEditProfile) *Ap
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseUserEditProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := database3.Permission(req.Permission)
-	if !permission.HasPermission(database3.UserEditBaseInfo) {
+	permission := operation.Permission(req.Permission)
+	if !permission.HasPermission(operation.UserEditBaseInfo) {
 		return NewApiResponse[ResponseUserEditProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
 	req.ID = req.TargetUid
@@ -314,11 +314,11 @@ func (userService *UserService) GetUserList(req *RequestUserList) *ApiResponse[R
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseUserList](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := database3.Permission(req.Permission)
-	if !permission.HasPermission(database3.UserShowList) {
+	permission := operation.Permission(req.Permission)
+	if !permission.HasPermission(operation.UserShowList) {
 		return NewApiResponse[ResponseUserList](&ErrNoPermission, Unsatisfied, nil)
 	}
-	users, total, err := database.GetUsers(req.Page, req.PageSize)
+	users, total, err := userService.userOperation.GetUsers(req.Page, req.PageSize)
 	if err != nil {
 		return NewApiResponse[ResponseUserList](&ErrDatabaseFail, Unsatisfied, nil)
 	}
@@ -339,14 +339,14 @@ func (userService *UserService) EditUserPermission(req *RequestUserEditPermissio
 	if req.Uid <= 0 {
 		return NewApiResponse[ResponseUserEditPermission](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditPermission](req.Uid, req.TargetUid, database3.UserEditPermission)
+	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditPermission](userService.userOperation, req.Uid, req.TargetUid, operation.UserEditPermission)
 	if res != nil {
 		return res
 	}
-	permission := database3.Permission(user.Permission)
-	targetPermission := database3.Permission(targetUser.Permission)
+	permission := operation.Permission(user.Permission)
+	targetPermission := operation.Permission(targetUser.Permission)
 	for key, value := range req.Permissions {
-		if per, ok := database3.PermissionMap[key]; ok {
+		if per, ok := operation.PermissionMap[key]; ok {
 			if !permission.HasPermission(per) {
 				return NewApiResponse[ResponseUserEditPermission](&ErrNoPermission, Unsatisfied, nil)
 			}
@@ -365,7 +365,7 @@ func (userService *UserService) EditUserPermission(req *RequestUserEditPermissio
 	}
 
 	if _, res := CallDBFuncAndCheckError[interface{}, ResponseUserEditPermission](func() (*interface{}, error) {
-		return nil, targetUser.UpdatePermission(targetPermission)
+		return nil, userService.userOperation.UpdateUserPermission(targetUser, targetPermission)
 	}); res != nil {
 		return res
 	}
@@ -388,7 +388,7 @@ func (userService *UserService) EditUserRating(req *RequestUserEditRating) *ApiR
 	if req.Uid <= 0 || req.Rating < fsd.Ban.Index() || req.Rating > fsd.Administrator.Index() {
 		return NewApiResponse[ResponseUserEditRating](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditRating](req.Uid, req.TargetUid, database3.UserEditRating)
+	user, targetUser, res := GetUsersAndCheckPermission[ResponseUserEditRating](userService.userOperation, req.Uid, req.TargetUid, operation.UserEditRating)
 	if res != nil {
 		return res
 	}
@@ -399,7 +399,7 @@ func (userService *UserService) EditUserRating(req *RequestUserEditRating) *ApiR
 	}
 
 	if _, res := CallDBFuncAndCheckError[interface{}, ResponseUserEditRating](func() (*interface{}, error) {
-		return nil, targetUser.UpdateRating(newRating.Index())
+		return nil, userService.userOperation.UpdateUserRating(targetUser, newRating.Index())
 	}); res != nil {
 		return res
 	}

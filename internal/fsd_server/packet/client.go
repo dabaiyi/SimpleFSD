@@ -5,9 +5,8 @@ import (
 	"errors"
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	database3 "github.com/half-nothing/fsd-server/internal/database"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/fsd"
-	database2 "github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	"github.com/half-nothing/fsd-server/internal/utils"
 	"slices"
 	"sync"
@@ -16,71 +15,93 @@ import (
 )
 
 type Client struct {
-	isAtc          bool
-	callsign       string
-	rating         Rating
-	facility       Facility
-	user           *database2.User
-	protocol       int
-	realName       string
-	socket         ConnectionHandlerInterface
-	position       [4]Position
-	simType        int
-	transponder    string
-	altitude       int
-	groundSpeed    int
-	frequency      int
-	pbh            uint32
-	visualRange    float64
-	flightPlan     *database2.FlightPlan
-	atisInfo       []string
-	history        *database2.History
-	config         *c.Config
-	clientManager  ClientManagerInterface
-	disconnect     atomic.Bool
-	motdBytes      []byte
-	reconnectTimer *time.Timer
-	lock           sync.RWMutex
+	isAtc               bool
+	callsign            string
+	rating              Rating
+	facility            Facility
+	user                *operation.User
+	protocol            int
+	realName            string
+	socket              ConnectionHandlerInterface
+	position            [4]Position
+	simType             int
+	transponder         string
+	altitude            int
+	groundSpeed         int
+	frequency           int
+	pbh                 uint32
+	visualRange         float64
+	flightPlan          *operation.FlightPlan
+	atisInfo            []string
+	paths               []*PilotPath
+	history             *operation.History
+	clientManager       ClientManagerInterface
+	disconnect          atomic.Bool
+	motdBytes           []byte
+	reconnectTimer      *time.Timer
+	lock                sync.RWMutex
+	config              *c.Config
+	userOperation       operation.UserOperationInterface
+	flightPlanOperation operation.FlightPlanOperationInterface
+	historyOperation    operation.HistoryOperationInterface
+	pathTrigger         *utils.OverflowTrigger
 }
 
 func (cm *ClientManager) NewClient(callsign string, rating Rating, protocol int, realName string, socket ConnectionHandlerInterface, isAtc bool) ClientInterface {
 	socket.SetCallsign(callsign)
-	var flightPlan *database2.FlightPlan = nil
+	var flightPlan *operation.FlightPlan = nil
+	flightPlanOperation := cm.applicationContent.FlightPlanOperation()
+	userOperation := cm.applicationContent.UserOperation()
+	historyOperation := cm.applicationContent.HistoryOperation()
 	if !isAtc && !cm.config.Server.General.SimulatorServer {
 		var err error
-		flightPlan, err = database3.GetFlightPlan(socket.User().Cid)
-		if errors.Is(err, database3.ErrFlightPlanNotFound) {
+		flightPlan, err = flightPlanOperation.GetFlightPlanByCid(socket.User().Cid)
+		if errors.Is(err, operation.ErrFlightPlanNotFound) {
 			c.WarnF("No flight plan found for %s(%d)", callsign, socket.User().Cid)
 		} else if err != nil {
 			c.WarnF("Fail to get flight plan for %s(%d): %v", callsign, socket.User().Cid, err)
 		}
 	}
-	return &Client{
-		isAtc:          isAtc,
-		callsign:       callsign,
-		rating:         rating,
-		facility:       0,
-		user:           socket.User(),
-		protocol:       protocol,
-		realName:       realName,
-		socket:         socket,
-		position:       [4]Position{{0, 0}, {0, 0}, {0, 0}, {0, 0}},
-		simType:        0,
-		transponder:    "2000",
-		altitude:       0,
-		groundSpeed:    0,
-		frequency:      99998,
-		visualRange:    40,
-		flightPlan:     flightPlan,
-		atisInfo:       make([]string, 0, 4),
-		history:        database3.NewHistory(socket.User().Cid, callsign, isAtc),
-		motdBytes:      nil,
-		config:         cm.config,
-		clientManager:  cm,
-		disconnect:     atomic.Bool{},
-		reconnectTimer: nil,
-		lock:           sync.RWMutex{},
+	client := &Client{
+		isAtc:               isAtc,
+		callsign:            callsign,
+		rating:              rating,
+		facility:            0,
+		user:                socket.User(),
+		protocol:            protocol,
+		realName:            realName,
+		socket:              socket,
+		position:            [4]Position{{0, 0}, {0, 0}, {0, 0}, {0, 0}},
+		simType:             0,
+		transponder:         "2000",
+		altitude:            0,
+		groundSpeed:         0,
+		frequency:           99998,
+		visualRange:         40,
+		flightPlan:          flightPlan,
+		atisInfo:            make([]string, 0, 4),
+		paths:               make([]*PilotPath, 0),
+		history:             historyOperation.NewHistory(socket.User().Cid, callsign, isAtc),
+		motdBytes:           nil,
+		clientManager:       cm,
+		disconnect:          atomic.Bool{},
+		reconnectTimer:      nil,
+		lock:                sync.RWMutex{},
+		config:              cm.config,
+		userOperation:       userOperation,
+		flightPlanOperation: flightPlanOperation,
+		historyOperation:    historyOperation,
 	}
+	client.pathTrigger = utils.NewOverflowTrigger(cm.config.Server.FSDServer.PosUpdatePoints, client.recordPathPoint)
+	return client
+}
+
+func (client *Client) recordPathPoint() {
+	client.paths = append(client.paths, &PilotPath{
+		Latitude:  client.position[0].Latitude,
+		Longitude: client.position[0].Longitude,
+		Altitude:  client.altitude,
+	})
 }
 
 func (client *Client) Disconnected() bool {
@@ -99,18 +120,18 @@ func (client *Client) Delete() {
 		}
 
 		if client.isAtc || !client.config.Server.General.SimulatorServer {
-			if err := client.history.End(); err != nil {
+			if err := client.historyOperation.EndRecordAndSaveHistory(client.history); err != nil {
 				c.ErrorF("[%s](%s) Failed to end history: %v", client.socket.ConnId(), client.callsign, err)
 			}
 		}
 
 		if client.isAtc {
-			if err := client.user.AddAtcTime(client.history.OnlineTime); err != nil {
+			if err := client.userOperation.UpdateUserAtcTime(client.user, client.history.OnlineTime); err != nil {
 				c.ErrorF("[%s](%s) Failed to add ATC time: %v", client.socket.ConnId(), client.callsign, err)
 			}
 		} else if !client.config.Server.General.SimulatorServer {
 			// 如果不是模拟机服务器, 则写入机组连线时长
-			if err := client.user.AddPilotTime(client.history.OnlineTime); err != nil {
+			if err := client.userOperation.UpdateUserPilotTime(client.user, client.history.OnlineTime); err != nil {
 				c.ErrorF("[%s](%s) Failed to add pilot time: %v", client.socket.ConnId(), client.callsign, err)
 			}
 		}
@@ -177,7 +198,7 @@ func (client *Client) MarkedDisconnect(immediate bool) {
 
 func (client *Client) UpsertFlightPlan(flightPlanData []string) error {
 	if client.flightPlan == nil {
-		flightPlan, err := database3.UpsertFlightPlan(client.user, client.callsign, flightPlanData)
+		flightPlan, err := client.flightPlanOperation.UpsertFlightPlan(client.user, client.callsign, flightPlanData)
 		if err != nil {
 			return err
 		}
@@ -195,7 +216,7 @@ func (client *Client) UpsertFlightPlan(flightPlanData []string) error {
 			client.flightPlan.Locked = false
 		}
 	}
-	err := client.flightPlan.UpdateFlightPlan(flightPlanData, false)
+	err := client.flightPlanOperation.UpdateFlightPlan(client.flightPlan, flightPlanData, false)
 	return err
 }
 
@@ -214,6 +235,7 @@ func (client *Client) UpdatePilotPos(transponder int, lat float64, lon float64, 
 	client.altitude = alt
 	client.groundSpeed = groundSpeed
 	client.pbh = pbh
+	go client.pathTrigger.Tick()
 }
 
 func (client *Client) UpdateAtcPos(frequency int, facility Facility, visualRange float64, lat float64, lon float64) {
@@ -340,19 +362,19 @@ func (client *Client) Position() [4]Position { return client.position }
 
 func (client *Client) VisualRange() float64 { return client.visualRange }
 
-func (client *Client) SetUser(user *database2.User) { client.user = user }
+func (client *Client) SetUser(user *operation.User) { client.user = user }
 
 func (client *Client) SetSimType(simType int) { client.simType = simType }
 
-func (client *Client) FlightPlan() *database2.FlightPlan { return client.flightPlan }
+func (client *Client) FlightPlan() *operation.FlightPlan { return client.flightPlan }
 
-func (client *Client) User() *database2.User { return client.user }
+func (client *Client) User() *operation.User { return client.user }
 
 func (client *Client) Frequency() int { return client.frequency }
 
 func (client *Client) AtisInfo() []string { return client.atisInfo }
 
-func (client *Client) History() *database2.History { return client.history }
+func (client *Client) History() *operation.History { return client.history }
 
 func (client *Client) Transponder() string { return client.transponder }
 
@@ -363,4 +385,8 @@ func (client *Client) GroundSpeed() int { return client.groundSpeed }
 func (client *Client) Heading() int {
 	_, _, heading, _ := utils.UnpackPBH(client.pbh)
 	return int(heading)
+}
+
+func (client *Client) Paths() []*PilotPath {
+	return client.paths
 }

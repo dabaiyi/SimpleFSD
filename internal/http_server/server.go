@@ -9,8 +9,9 @@ import (
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/fsd_server/packet"
 	"github.com/half-nothing/fsd-server/internal/http_server/controller"
-	middleware2 "github.com/half-nothing/fsd-server/internal/http_server/middleware"
-	service2 "github.com/half-nothing/fsd-server/internal/http_server/service"
+	mid "github.com/half-nothing/fsd-server/internal/http_server/middleware"
+	impl "github.com/half-nothing/fsd-server/internal/http_server/service"
+	. "github.com/half-nothing/fsd-server/internal/interfaces"
 	"github.com/half-nothing/fsd-server/internal/interfaces/service"
 	"github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
@@ -39,7 +40,8 @@ func (hc *HttpServerShutdownCallback) Invoke(ctx context.Context) error {
 	return hc.serverHandler.Shutdown(timeoutCtx)
 }
 
-func StartHttpServer(config *c.Config) {
+func StartHttpServer(applicationContent *ApplicationContent) {
+	config := applicationContent.Config()
 	e := echo.New()
 	e.Logger.SetOutput(io.Discard)
 	e.Logger.SetLevel(log.OFF)
@@ -96,7 +98,7 @@ func StartHttpServer(config *c.Config) {
 		httpConfig.Limits.RateLimitDuration = time.Minute
 	}
 
-	ipPathLimiter := middleware2.NewSlidingWindowLimiter(
+	ipPathLimiter := mid.NewSlidingWindowLimiter(
 		httpConfig.Limits.RateLimitDuration,
 		httpConfig.Limits.RateLimit,
 	)
@@ -109,7 +111,7 @@ func StartHttpServer(config *c.Config) {
 
 	whazzupContent := fmt.Sprintf("url0=%s/api/clients", httpConfig.WhazzupUrlHeader)
 
-	e.Use(middleware2.RateLimitMiddleware(ipPathLimiter, middleware2.CombinedKeyFunc))
+	e.Use(mid.RateLimitMiddleware(ipPathLimiter, mid.CombinedKeyFunc))
 
 	jwtConfig := echojwt.Config{
 		SigningKey:    []byte(httpConfig.JWT.Secret),
@@ -134,23 +136,23 @@ func StartHttpServer(config *c.Config) {
 
 	jwtMiddleware := echojwt.WithConfig(jwtConfig)
 
-	emailService := service2.NewEmailService(config.Server.HttpServer.Email)
-	service2.InitValidator(config.Server.HttpServer.Limits)
+	emailService := impl.NewEmailService(config.Server.HttpServer.Email)
+	impl.InitValidator(config.Server.HttpServer.Limits)
 
 	var storeService service.StoreServiceInterface
-	storeService = service2.NewLocalStoreService(httpConfig.Store)
+	storeService = impl.NewLocalStoreService(httpConfig.Store)
 	switch httpConfig.Store.StoreType {
 	case 1:
-		storeService = service2.NewALiYunOssStoreService(storeService, httpConfig.Store)
+		storeService = impl.NewALiYunOssStoreService(storeService, httpConfig.Store)
 	case 2:
-		storeService = service2.NewTencentCosStoreService(storeService, httpConfig.Store)
+		storeService = impl.NewTencentCosStoreService(storeService, httpConfig.Store)
 	}
 
-	userService := service2.NewUserService(emailService, httpConfig)
-	clientManager := packet.NewClientManager(config)
-	clientService := service2.NewClientService(httpConfig, clientManager, emailService)
-	serverService := service2.NewServerService(config.Server)
-	activityService := service2.NewActivityService(httpConfig)
+	userService := impl.NewUserService(emailService, httpConfig, applicationContent.UserOperation())
+	clientManager := packet.NewClientManager(applicationContent)
+	clientService := impl.NewClientService(httpConfig, clientManager, emailService, applicationContent.UserOperation())
+	serverService := impl.NewServerService(config.Server)
+	activityService := impl.NewActivityService(httpConfig, applicationContent.UserOperation(), applicationContent.ActivityOperation())
 
 	userController := controller.NewUserHandler(userService)
 	emailController := controller.NewEmailController(emailService)
@@ -180,13 +182,21 @@ func StartHttpServer(config *c.Config) {
 	clientGroup.POST("/:callsign/message", clientController.SendMessageToClient, jwtMiddleware)
 	clientGroup.DELETE("/:callsign", clientController.KillClient, jwtMiddleware)
 
-	serverGroup := apiGroup.Group("/fsd_server")
+	serverGroup := apiGroup.Group("/server")
 	serverGroup.GET("/config", serverController.GetServerConfig)
 
 	activityGroup := apiGroup.Group("/activities")
-	activityGroup.GET("", activityController.GetActivities)
-	activityGroup.GET("/:id", activityController.GetActivityInfo)
+	activityGroup.GET("", activityController.GetActivities, jwtMiddleware)
+	activityGroup.GET("/:id", activityController.GetActivityInfo, jwtMiddleware)
 	activityGroup.POST("", activityController.AddActivity, jwtMiddleware)
+	activityGroup.DELETE("/:id", activityController.DeleteActivity, jwtMiddleware)
+	activityGroup.POST("/:id/controllers/:facility_id", activityController.ControllerJoin, jwtMiddleware)
+	activityGroup.DELETE("/:id/controllers/:facility_id", activityController.ControllerLeave, jwtMiddleware)
+	activityGroup.POST("/:id/pilots", activityController.PilotJoin, jwtMiddleware)
+	activityGroup.DELETE("/:id/pilots", activityController.PilotLeave, jwtMiddleware)
+	activityGroup.PUT("/:id/status", activityController.EditActivityStatus, jwtMiddleware)
+	activityGroup.PUT("/:id/pilots/:pilot_id/status", activityController.EditPilotStatus, jwtMiddleware)
+	activityGroup.PUT("/:id", activityController.EditActivity, jwtMiddleware)
 
 	fileGroup := apiGroup.Group("/files")
 	fileGroup.POST("/images", fileController.UploadImages, jwtMiddleware)
@@ -199,7 +209,7 @@ func StartHttpServer(config *c.Config) {
 	if httpConfig.SSL.Enable {
 		protocol = "https"
 	}
-	c.InfoF("Starting %s fsd_server on %s", protocol, httpConfig.Address)
+	c.InfoF("Starting %s server on %s", protocol, httpConfig.Address)
 	c.InfoF("Rate limit: %d requests per %v",
 		httpConfig.Limits.RateLimit,
 		httpConfig.Limits.RateLimitDuration)

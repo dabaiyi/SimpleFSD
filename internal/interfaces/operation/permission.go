@@ -1,4 +1,4 @@
-// Package service
+// Package operation
 package operation
 
 type Permission int64
@@ -16,26 +16,28 @@ const (
 	ActivityEditContent
 	ActivityEditFacility
 	ActivityEditState
+	ActivityEditPilotState
 	ActivityDelete
 	ClientSendMessage
 	ClientKill
 )
 
 var PermissionMap = map[string]Permission{
-	"AdminEntry":           AdminEntry,
-	"UserShowList":         UserShowList,
-	"UserGetProfile":       UserGetProfile,
-	"UserAdd":              UserAdd,
-	"UserEditBaseInfo":     UserEditBaseInfo,
-	"UserEditPermission":   UserEditPermission,
-	"UserEditRating":       UserEditRating,
-	"ActivityPublish":      ActivityPublish,
-	"ActivityEditContent":  ActivityEditContent,
-	"ActivityEditFacility": ActivityEditFacility,
-	"ActivityEditState":    ActivityEditState,
-	"ActivityDelete":       ActivityDelete,
-	"ClientSendMessage":    ClientSendMessage,
-	"ClientKill":           ClientKill,
+	"AdminEntry":             AdminEntry,
+	"UserShowList":           UserShowList,
+	"UserGetProfile":         UserGetProfile,
+	"UserAdd":                UserAdd,
+	"UserEditBaseInfo":       UserEditBaseInfo,
+	"UserEditPermission":     UserEditPermission,
+	"UserEditRating":         UserEditRating,
+	"ActivityPublish":        ActivityPublish,
+	"ActivityEditContent":    ActivityEditContent,
+	"ActivityEditFacility":   ActivityEditFacility,
+	"ActivityEditState":      ActivityEditState,
+	"ActivityEditPilotState": ActivityEditPilotState,
+	"ActivityDelete":         ActivityDelete,
+	"ClientSendMessage":      ClientSendMessage,
+	"ClientKill":             ClientKill,
 }
 
 func (p *Permission) IsValid() bool {

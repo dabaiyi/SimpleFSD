@@ -19,6 +19,7 @@ const (
 	Unauthorized        HttpCode = 401
 	PermissionDenied    HttpCode = 403
 	NotFound            HttpCode = 404
+	Conflict            HttpCode = 409
 	ServerInternalError HttpCode = 500
 )
 
@@ -94,6 +95,8 @@ var (
 	ErrNoPermission          = ApiStatus{"NO_PERMISSION", "无权这么做", PermissionDenied}
 	ErrDatabaseFail          = ApiStatus{"DATABASE_ERROR", "服务器内部错误", ServerInternalError}
 	ErrUserNotFound          = ApiStatus{"USER_NOT_FOUND", "指定用户不存在", NotFound}
+	ErrActivityNotFound      = ApiStatus{"ACTIVITY_NOT_FOUND", "活动不存在", NotFound}
+	ErrFacilityNotFound      = ApiStatus{"FACILITY_NOT_FOUND", "管制席位不存在", NotFound}
 	ErrRegisterFail          = ApiStatus{"REGISTER_FAIL", "注册失败", ServerInternalError}
 	ErrIdentifierTaken       = ApiStatus{"USER_EXISTS", "用户已存在", BadRequest}
 	ErrMissingOrMalformedJwt = ApiStatus{"MISSING_OR_MALFORMED_JWT", "缺少JWT令牌或者令牌格式错误", BadRequest}
@@ -130,7 +133,12 @@ func CallDBFuncAndCheckError[R any, T any](fc func() (*R, error)) (*R, *ApiRespo
 		return nil, NewApiResponse[T](&ErrIdentifierTaken, Unsatisfied, nil)
 	case errors.Is(err, operation.ErrUserNotFound):
 		return nil, NewApiResponse[T](&ErrUserNotFound, Unsatisfied, nil)
+	case errors.Is(err, operation.ErrActivityNotFound):
+		return nil, NewApiResponse[T](&ErrActivityNotFound, Unsatisfied, nil)
+	case errors.Is(err, operation.ErrFacilityNotFound):
+		return nil, NewApiResponse[T](&ErrFacilityNotFound, Unsatisfied, nil)
 	case err != nil:
+		c.ErrorF("Error in DB function: %v", err)
 		return nil, NewApiResponse[T](&ErrDatabaseFail, Unsatisfied, nil)
 	default:
 		return result, nil

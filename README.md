@@ -354,4 +354,4 @@ Copyright (c) 2025 Half_nothing
 
 [Issue]: https://github.com/Flyleague-Collection/fsd-server/issues/new
 
-[HttpApiDocs]: https://3v26cojptv.apifox.cn/334394948e0
+[HttpApiDocs]: https://fsd.docs.half-nothing.cn/

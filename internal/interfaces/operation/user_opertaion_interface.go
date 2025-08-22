@@ -19,6 +19,21 @@ var (
 	ErrOldPassword = errors.New("old password error")
 )
 
+type UserId interface {
+	GetUser(userOperation UserOperationInterface) (*User, error)
+}
+
+type IntUserId int
+type StringUserId string
+
+func (id IntUserId) GetUser(userOperation UserOperationInterface) (*User, error) {
+	return userOperation.GetUserByCid(uint(id))
+}
+
+func (id StringUserId) GetUser(userOperation UserOperationInterface) (*User, error) {
+	return userOperation.GetUserByUsernameOrEmail(string(id))
+}
+
 // UserOperationInterface 用户操作接口定义
 type UserOperationInterface interface {
 	// GetUserByUid 通过主键ID获取用户, 当err为nil时返回值user有效
@@ -43,8 +58,8 @@ type UserOperationInterface interface {
 	UpdateUserPilotTime(user *User, seconds int) (err error)
 	// UpdateUserRating 更新用户管制权限, 当err为nil时表示更新成功
 	UpdateUserRating(user *User, rating int) (err error)
-	// UpdatePermission 更新用户飞控权限, 当err为nil时表示更新成功
-	UpdatePermission(user *User, permission Permission) (err error)
+	// UpdateUserPermission 更新用户飞控权限, 当err为nil时表示更新成功
+	UpdateUserPermission(user *User, permission Permission) (err error)
 	// UpdateUserInfo 批量更新用户信息, 当err为nil时表示更新成功
 	UpdateUserInfo(user *User, info map[string]interface{}) (err error)
 	// UpdateUserPassword 更新用户密码(不写入数据库, 仅验证), 当err为nil时返回值encodePassword有效

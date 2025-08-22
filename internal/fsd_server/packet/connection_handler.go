@@ -17,26 +17,36 @@ var (
 )
 
 type ConnectionHandler struct {
-	conn          net.Conn
-	connId        string
-	callsign      string
-	client        ClientInterface
-	clientManager ClientManagerInterface
-	user          *operation.User
-	disconnected  atomic.Bool
-	config        *c.Config
+	conn                net.Conn
+	connId              string
+	callsign            string
+	client              ClientInterface
+	clientManager       ClientManagerInterface
+	user                *operation.User
+	disconnected        atomic.Bool
+	config              *c.OtherConfig
+	userOperation       operation.UserOperationInterface
+	flightPlanOperation operation.FlightPlanOperationInterface
 }
 
-func NewConnectionHandler(conn net.Conn, connId string, config *c.Config, cm ClientManagerInterface) *ConnectionHandler {
+func NewConnectionHandler(
+	conn net.Conn,
+	config *c.OtherConfig,
+	cm ClientManagerInterface,
+	userOperation operation.UserOperationInterface,
+	flightPlanOperation operation.FlightPlanOperationInterface,
+) *ConnectionHandler {
 	return &ConnectionHandler{
-		conn:          conn,
-		connId:        connId,
-		callsign:      "unknown",
-		client:        nil,
-		clientManager: cm,
-		user:          nil,
-		disconnected:  atomic.Bool{},
-		config:        config,
+		conn:                conn,
+		connId:              conn.RemoteAddr().String(),
+		callsign:            "unknown",
+		client:              nil,
+		clientManager:       cm,
+		user:                nil,
+		disconnected:        atomic.Bool{},
+		config:              config,
+		userOperation:       userOperation,
+		flightPlanOperation: flightPlanOperation,
 	}
 }
 

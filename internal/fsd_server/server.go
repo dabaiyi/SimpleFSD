@@ -4,6 +4,7 @@ import (
 	"context"
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/fsd_server/packet"
+	. "github.com/half-nothing/fsd-server/internal/interfaces"
 	"github.com/half-nothing/fsd-server/internal/interfaces/fsd"
 	"net"
 	"time"
@@ -38,9 +39,10 @@ func (dc *FsdCloseCallback) Invoke(ctx context.Context) error {
 }
 
 // StartFSDServer 启动FSD服务器
-func StartFSDServer(config *c.Config) {
+func StartFSDServer(applicationContent *ApplicationContent) {
+	config := applicationContent.Config()
 	// 初始化客户端管理器
-	cm := packet.NewClientManager(config)
+	cm := packet.NewClientManager(applicationContent)
 
 	// 创建TCP监听器
 	sem := make(chan struct{}, config.Server.FSDServer.MaxWorkers)
@@ -74,7 +76,13 @@ func StartFSDServer(config *c.Config) {
 		// 使用信号量控制并发连接数
 		sem <- struct{}{}
 		go func(c net.Conn) {
-			connection := packet.NewConnectionHandler(conn, conn.RemoteAddr().String(), config, cm)
+			connection := packet.NewConnectionHandler(
+				conn,
+				config.Server.General,
+				cm,
+				applicationContent.UserOperation(),
+				applicationContent.FlightPlanOperation(),
+			)
 			connection.HandleConnection()
 			// 释放信号量
 			<-sem

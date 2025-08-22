@@ -8,11 +8,12 @@ import (
 )
 
 type HistoryOperation struct {
-	db *gorm.DB
+	db           *gorm.DB
+	queryTimeout time.Duration
 }
 
-func NewHistoryOperation(db *gorm.DB) *HistoryOperation {
-	return &HistoryOperation{db: db}
+func NewHistoryOperation(db *gorm.DB, queryTimeout time.Duration) *HistoryOperation {
+	return &HistoryOperation{db: db, queryTimeout: queryTimeout}
 }
 
 func (historyOperation *HistoryOperation) NewHistory(cid int, callsign string, isAtc bool) (history *History) {
@@ -27,10 +28,10 @@ func (historyOperation *HistoryOperation) NewHistory(cid int, callsign string, i
 }
 
 func (historyOperation *HistoryOperation) SaveHistory(history *History) (err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), historyOperation.queryTimeout)
 	defer cancel()
 
-	return database.WithContext(ctx).Save(history).Error
+	return historyOperation.db.WithContext(ctx).Save(history).Error
 }
 
 func (historyOperation *HistoryOperation) EndRecordAndSaveHistory(history *History) (err error) {

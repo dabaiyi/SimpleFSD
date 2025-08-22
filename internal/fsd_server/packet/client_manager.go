@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
+	"github.com/half-nothing/fsd-server/internal/interfaces"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/fsd"
 	"math/rand"
 	"strconv"
@@ -13,12 +14,13 @@ import (
 )
 
 type ClientManager struct {
-	clients         map[string]ClientInterface
-	lock            sync.RWMutex
-	shuttingDown    atomic.Bool
-	config          *c.Config
-	heartbeatSender *HeartbeatSender
-	clientSlicePool sync.Pool
+	clients            map[string]ClientInterface
+	lock               sync.RWMutex
+	shuttingDown       atomic.Bool
+	config             *c.Config
+	heartbeatSender    *HeartbeatSender
+	clientSlicePool    sync.Pool
+	applicationContent *interfaces.ApplicationContent
 }
 
 var (
@@ -26,20 +28,21 @@ var (
 	once          sync.Once
 )
 
-func NewClientManager(config *c.Config) *ClientManager {
+func NewClientManager(applicationContent *interfaces.ApplicationContent) *ClientManager {
 	once.Do(func() {
 		if clientManager == nil {
 			clientManager = &ClientManager{
-				clients:      make(map[string]ClientInterface),
-				shuttingDown: atomic.Bool{},
-				config:       config,
+				clients:            make(map[string]ClientInterface),
+				shuttingDown:       atomic.Bool{},
+				config:             applicationContent.Config(),
+				applicationContent: applicationContent,
 				clientSlicePool: sync.Pool{
 					New: func() interface{} {
 						return make([]ClientInterface, 0, 128)
 					},
 				},
 			}
-			clientManager.heartbeatSender = NewHeartbeatSender(config.Server.FSDServer.HeartbeatDuration, clientManager.SendHeartBeat)
+			clientManager.heartbeatSender = NewHeartbeatSender(applicationContent.Config().Server.FSDServer.HeartbeatDuration, clientManager.SendHeartBeat)
 		}
 	})
 	return clientManager

@@ -4,7 +4,7 @@ package service
 import (
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
 	"io"
 	"mime/multipart"
@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 )
-
-const imageStorePrefix = "images"
 
 type LocalStoreService struct {
 	config *c.HttpServerStore
@@ -82,8 +80,8 @@ func (store *LocalStoreService) SaveUploadImages(req *RequestUploadFile) *ApiRes
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseUploadFile](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := Permission(req.Permission)
-	if !permission.HasPermission(ActivityPublish) {
+	permission := operation.Permission(req.Permission)
+	if !permission.HasPermission(operation.ActivityPublish) {
 		return NewApiResponse[ResponseUploadFile](&ErrNoPermission, PermissionDenied, nil)
 	}
 	storeInfo, res := store.SaveImageFile(req.File)

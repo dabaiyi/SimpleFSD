@@ -5,6 +5,12 @@ import (
 	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
 )
 
+type PilotPath struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Altitude  int     `json:"altitude"`
+}
+
 type ClientInterface interface {
 	Disconnected() bool
 	Delete()
@@ -41,4 +47,5 @@ type ClientInterface interface {
 	Altitude() int
 	GroundSpeed() int
 	Heading() int
+	Paths() []*PilotPath
 }

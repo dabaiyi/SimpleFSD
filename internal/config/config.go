@@ -88,6 +88,7 @@ type FSDServerConfig struct {
 	Address              string                  `json:"-"`
 	AirportDataFile      string                  `json:"airport_data_file"`
 	AirportData          map[string]*AirportData `json:"-"`
+	PosUpdatePoints      int                     `json:"pos_update_points"`
 	HeartbeatInterval    string                  `json:"heartbeat_interval"`
 	HeartbeatDuration    time.Duration           `json:"-"`
 	SessionCleanTime     string                  `json:"session_clean_time"`    // 会话保留时间
@@ -103,7 +104,7 @@ func defaultFSDServerConfig() *FSDServerConfig {
 		Host:                "0.0.0.0",
 		Port:                6809,
 		AirportDataFile:     "data/airport.json",
-		AirportData:         make(map[string]*AirportData),
+		PosUpdatePoints:     1,
 		HeartbeatInterval:   "60s",
 		SessionCleanTime:    "40s",
 		MaxWorkers:          128,
@@ -122,6 +123,10 @@ func (config *FSDServerConfig) CheckValid() (bool, error) {
 	}
 
 	config.Address = fmt.Sprintf("%s:%d", config.Host, config.Port)
+
+	if config.PosUpdatePoints < 0 {
+		return false, fmt.Errorf("invalid json field pos_update_points, pos_update_points must larger than 0")
+	}
 
 	if bytes, err := cachedContent(config.AirportDataFile, AirportDataFileUrl); err != nil {
 		WarnF("fail to load airport data, airport check disable, %v", err)
@@ -206,7 +211,7 @@ func defaultSSLConfig() *SSLConfig {
 func (config *SSLConfig) CheckValid() (bool, error) {
 	if config.Enable {
 		if config.CertFile == "" || config.KeyFile == "" {
-			WarnF("HTTPS fsd_server requires both cert and key files. Cert: %s, Key: %s. Falling back to HTTP", config.CertFile, config.KeyFile)
+			WarnF("HTTPS server requires both cert and key files. Cert: %s, Key: %s. Falling back to HTTP", config.CertFile, config.KeyFile)
 			config.Enable = false
 		}
 	}
@@ -686,7 +691,7 @@ func (config *ServerConfig) CheckValid() (bool, error) {
 type DatabaseConfig struct {
 	Type                 string        `json:"type"`
 	DBType               DatabaseType  `json:"-"`
-	Database             string        `json:"operation"`
+	Database             string        `json:"database"`
 	Host                 string        `json:"host"`
 	Port                 int           `json:"port"`
 	Username             string        `json:"username"`
@@ -702,7 +707,7 @@ type DatabaseConfig struct {
 func defaultDatabaseConfig() *DatabaseConfig {
 	return &DatabaseConfig{
 		Type:                 "sqlite3",
-		Database:             "operation.db",
+		Database:             "database.db",
 		Host:                 "",
 		Port:                 0,
 		Username:             "",
@@ -717,7 +722,7 @@ func defaultDatabaseConfig() *DatabaseConfig {
 func (config *DatabaseConfig) CheckValid() (bool, error) {
 	config.DBType = DatabaseType(config.Type)
 	if !slices.Contains(allowedDatabaseType, config.DBType) {
-		return false, fmt.Errorf("operation type %s is not allowed, support operation is %v, please check the configuration file", config.DBType, allowedDatabaseType)
+		return false, fmt.Errorf("database type %s is not allowed, support database is %v, please check the configuration file", config.DBType, allowedDatabaseType)
 	}
 
 	if duration, err := time.ParseDuration(config.ConnectIdleTimeout); err != nil {
@@ -737,8 +742,8 @@ func (config *DatabaseConfig) CheckValid() (bool, error) {
 type Config struct {
 	DebugMode     bool            `json:"debug_mode"` // 是否启用调试模式
 	ConfigVersion string          `json:"config_version"`
-	Server        *ServerConfig   `json:"fsd_server"`
-	Database      *DatabaseConfig `json:"operation"`
+	Server        *ServerConfig   `json:"server"`
+	Database      *DatabaseConfig `json:"database"`
 	Rating        map[string]int  `json:"rating"`
 }
 
@@ -783,7 +788,7 @@ func readConfig() (*Config, error) {
 			return nil, err
 		}
 		return nil, errors.New("the configuration file does not exist and has been created. Please try again after editing the configuration file")
-	} else if err := json.Unmarshal(bytes, &config); err != nil {
+	} else if err := json.Unmarshal(bytes, config); err != nil {
 		// 解析JSON配置
 		return nil, fmt.Errorf("the configuration file does not contain valid JSON, %v", err)
 	} else if pass, err := config.CheckValid(); !pass {

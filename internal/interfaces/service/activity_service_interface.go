@@ -3,6 +3,7 @@ package service
 
 import (
 	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	"time"
 )
 
 type ActivityModel struct {
@@ -24,12 +25,13 @@ type ActivityServiceInterface interface {
 	GetActivityInfo(req *RequestActivityInfo) *ApiResponse[ResponseActivityInfo]
 	AddActivity(req *RequestAddActivity) *ApiResponse[ResponseAddActivity]
 	DeleteActivity(req *RequestDeleteActivity) *ApiResponse[ResponseDeleteActivity]
-	EditActivity(req *RequestEditActivity) *ApiResponse[ResponseEditActivity]
 	ControllerJoin(req *RequestControllerJoin) *ApiResponse[ResponseControllerJoin]
 	ControllerLeave(req *RequestControllerLeave) *ApiResponse[ResponseControllerLeave]
 	PilotJoin(req *RequestPilotJoin) *ApiResponse[ResponsePilotJoin]
 	PilotLeave(req *RequestPilotLeave) *ApiResponse[ResponsePilotLeave]
+	EditActivity(req *RequestEditActivity) *ApiResponse[ResponseEditActivity]
 	EditPilotStatus(req *RequestEditPilotStatus) *ApiResponse[ResponseEditPilotStatus]
+	EditActivityStatus(req *RequestEditActivityStatus) *ApiResponse[ResponseEditActivityStatus]
 }
 
 type RequestGetActivities struct {
@@ -63,15 +65,71 @@ type RequestDeleteActivity struct {
 
 type ResponseDeleteActivity bool
 
-type RequestEditActivity struct{}
-type ResponseEditActivity struct{}
-type RequestControllerJoin struct{}
-type ResponseControllerJoin struct{}
-type RequestControllerLeave struct{}
-type ResponseControllerLeave struct{}
-type RequestPilotJoin struct{}
-type ResponsePilotJoin struct{}
-type RequestPilotLeave struct{}
-type ResponsePilotLeave struct{}
-type RequestEditPilotStatus struct{}
-type ResponseEditPilotStatus struct{}
+type RequestControllerJoin struct {
+	JwtHeader
+	Rating     int
+	ActivityId uint `param:"id"`
+	FacilityId uint `param:"facility_id"`
+}
+
+type ResponseControllerJoin bool
+
+type RequestControllerLeave struct {
+	JwtHeader
+	Cid        int
+	ActivityId uint `param:"id"`
+	FacilityId uint `param:"facility_id"`
+}
+
+type ResponseControllerLeave bool
+
+type RequestPilotJoin struct {
+	JwtHeader
+	Cid          int
+	ActivityId   uint   `param:"id"`
+	Callsign     string `json:"callsign"`
+	AircraftType string `json:"aircraft_type"`
+}
+
+type ResponsePilotJoin bool
+
+type RequestPilotLeave struct {
+	JwtHeader
+	Cid        int
+	ActivityId uint `param:"id"`
+}
+
+type ResponsePilotLeave bool
+
+type RequestEditActivity struct {
+	JwtHeader
+	ActivityId       uint       `param:"id"`
+	Title            *string    `json:"title"`
+	ImageUrl         *string    `json:"image_url"`
+	ActiveTime       *time.Time `json:"active_time"`
+	DepartureAirport *string    `json:"departure_airport"`
+	ArrivalAirport   *string    `json:"arrival_airport"`
+	Route            *string    `json:"route"`
+	Distance         *int       `json:"distance"`
+	NOTAMS           *string    `json:"NOTAMS"`
+}
+
+type ResponseEditActivity bool
+
+type RequestEditActivityStatus struct {
+	JwtHeader
+	ActivityId uint `param:"id"`
+	Status     int  `json:"status"`
+}
+
+type ResponseEditActivityStatus bool
+
+type RequestEditPilotStatus struct {
+	JwtHeader
+	ActivityId uint `param:"id"`
+	Cid        int
+	PilotId    uint `param:"pilot_id"`
+	Status     int  `json:"status"`
+}
+
+type ResponseEditPilotStatus bool

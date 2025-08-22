@@ -4,19 +4,19 @@ package packet
 import (
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	"github.com/half-nothing/fsd-server/internal/fsd_server/database"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/fsd"
+	. "github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	"github.com/half-nothing/fsd-server/internal/utils"
 	"strings"
 )
 
 // getUserId 转换客户端传递过来的cid为数据库可识别的模式
-func getUserId(cid string) database.UserId {
+func getUserId(cid string) UserId {
 	id := utils.StrToInt(cid, -1)
 	if id != -1 {
-		return database.IntUserId(id)
+		return IntUserId(id)
 	}
-	return database.StringUserId(cid)
+	return StringUserId(cid)
 }
 
 func (ch *ConnectionHandler) checkPacketLength(data []string, requirement *CommandRequirement) (*Result, bool) {
@@ -28,7 +28,7 @@ func (ch *ConnectionHandler) checkPacketLength(data []string, requirement *Comma
 }
 
 // verifyUserInfo 验证用户信息与处理客户端重连机制
-func (ch *ConnectionHandler) verifyUserInfo(callsign string, protocol int, cid database.UserId, password string) *Result {
+func (ch *ConnectionHandler) verifyUserInfo(callsign string, protocol int, cid UserId, password string) *Result {
 	if !callsignValid(callsign) {
 		return ResultError(CallsignInvalid, true, callsign, nil)
 	}
@@ -50,14 +50,14 @@ func (ch *ConnectionHandler) verifyUserInfo(callsign string, protocol int, cid d
 		}
 	}
 
-	user, err := cid.GetUser()
+	user, err := cid.GetUser(ch.userOperation)
 	if err != nil {
 		return ResultError(AuthFail, true, callsign, err)
 	}
 	if user.Rating == Ban.Index() {
 		return ResultError(UserBaned, true, callsign, nil)
 	}
-	if !user.VerifyPassword(password) {
+	if !ch.userOperation.VerifyUserPassword(user, password) {
 		return ResultError(AuthFail, true, callsign, nil)
 	}
 
@@ -127,7 +127,7 @@ func (ch *ConnectionHandler) handleAddPilot(data []string, rawLine []byte) *Resu
 	go ch.clientManager.BroadcastMessage(rawLine, ch.client, BroadcastToClientInRange)
 	ch.client.SendMotd()
 	c.InfoF("[%s] client login successfully", callsign)
-	if !ch.config.Server.General.SimulatorServer {
+	if !ch.config.SimulatorServer {
 		flightPlan := ch.client.FlightPlan()
 		if flightPlan != nil && flightPlan.FromWeb && callsign != flightPlan.Callsign {
 			ch.client.SendLine(makePacket(Message, "FPlanManager", callsign,
@@ -236,13 +236,13 @@ func (ch *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *R
 			if !ok || client.FlightPlan() == nil {
 				return ResultError(NoFlightPlan, false, ch.client.Callsign(), nil)
 			}
-			ch.client.SendLine([]byte(client.FlightPlan().ToString(data[0])))
+			ch.client.SendLine([]byte(ch.flightPlanOperation.ToString(client.FlightPlan(), data[0])))
 		}
 	}
 	// 如果发送目标是一个频率
 	if strings.HasPrefix(targetStation, "@") {
 		// 如果目标频率是94835
-		if !ch.config.Server.General.SimulatorServer && targetStation == SpecialFrequency {
+		if !ch.config.SimulatorServer && targetStation == SpecialFrequency {
 			// 这里并不是发给服务器的, 所以如果客户端没有权限, 直接返回就行
 			if !ch.client.CheckFacility(AllowAtcFacility) {
 				return ResultSuccess()
@@ -256,7 +256,7 @@ func (ch *ConnectionHandler) handleClientQuery(data []string, rawLine []byte) *R
 					return ResultSuccess()
 				}
 				cruiseAltitude := utils.StrToInt(data[4], 0)
-				if err := client.FlightPlan().UpdateCruiseAltitude(fmt.Sprintf("FL%03d", cruiseAltitude/100), true); err != nil {
+				if err := ch.flightPlanOperation.UpdateCruiseAltitude(client.FlightPlan(), fmt.Sprintf("FL%03d", cruiseAltitude/100)); err != nil {
 					// 这里并不是发给服务器的, 所以如果出错, 直接返回就行
 					return ResultSuccess()
 				}
@@ -362,11 +362,11 @@ func (ch *ConnectionHandler) handleAtcEditPlan(data []string, _ []byte) *Result 
 	if client.FlightPlan == nil {
 		return ResultError(NoFlightPlan, false, ch.client.Callsign(), fmt.Errorf("%s do not have filght plan", ch.client.Callsign()))
 	}
-	client.FlightPlan().Locked = !ch.config.Server.General.SimulatorServer
-	if err := client.FlightPlan().UpdateFlightPlan(data[1:], true); err != nil {
+	client.FlightPlan().Locked = !ch.config.SimulatorServer
+	if err := ch.flightPlanOperation.UpdateFlightPlan(client.FlightPlan(), data[1:], true); err != nil {
 		return ResultError(Syntax, false, ch.client.Callsign(), err)
 	}
-	go ch.clientManager.BroadcastMessage([]byte(client.FlightPlan().ToString(string(AllATC))),
+	go ch.clientManager.BroadcastMessage([]byte(ch.flightPlanOperation.ToString(client.FlightPlan(), string(AllATC))),
 		ch.client, CombineBroadcastFilter(BroadcastToAtc, BroadcastToClientInRange))
 	return ResultSuccess()
 }

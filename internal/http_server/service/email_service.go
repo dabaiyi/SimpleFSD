@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/fsd_server/interfaces/service"
 	"github.com/half-nothing/fsd-server/internal/interfaces/fsd"
 	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/service"

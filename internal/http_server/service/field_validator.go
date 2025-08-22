@@ -3,7 +3,6 @@ package service
 
 import (
 	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/fsd_server/interfaces/service"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
 )
 

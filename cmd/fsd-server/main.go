@@ -4,8 +4,8 @@ import (
 	c "github.com/half-nothing/fsd-server/internal/config"
 	"github.com/half-nothing/fsd-server/internal/database"
 	"github.com/half-nothing/fsd-server/internal/fsd_server"
-	"github.com/half-nothing/fsd-server/internal/grpc_server"
 	"github.com/half-nothing/fsd-server/internal/http_server"
+	"github.com/half-nothing/fsd-server/internal/interfaces"
 	"github.com/half-nothing/fsd-server/internal/interfaces/fsd"
 )
 
@@ -20,15 +20,17 @@ func main() {
 	cleaner := c.GetCleaner()
 	cleaner.Init(loggerCallback)
 	defer cleaner.Clean()
-	if err := database.ConnectDatabase(config); err != nil {
+	databaseOperation, err := database.ConnectDatabase(config)
+	if err != nil {
 		c.FatalF("Error occurred while initializing operation, details: %v", err)
 		return
 	}
+	applicationContent := interfaces.NewApplicationContent(config, databaseOperation)
 	if config.Server.HttpServer.Enabled {
-		go http_server.StartHttpServer(config)
+		go http_server.StartHttpServer(applicationContent)
 	}
 	if config.Server.GRPCServer.Enabled {
-		go grpc_server.StartGRPCServer(config.Server.GRPCServer)
+		//go grpc_server.StartGRPCServer(applicationContent)
 	}
-	fsd_server.StartFSDServer(config)
+	fsd_server.StartFSDServer(applicationContent)
 }

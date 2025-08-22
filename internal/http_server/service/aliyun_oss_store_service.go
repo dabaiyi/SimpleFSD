@@ -6,7 +6,7 @@ import (
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
 	"mime/multipart"
 	"net/url"
@@ -70,8 +70,8 @@ func (store *ALiYunOssStoreService) SaveUploadImages(req *RequestUploadFile) *Ap
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseUploadFile](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := Permission(req.Permission)
-	if !permission.HasPermission(ActivityPublish) {
+	permission := operation.Permission(req.Permission)
+	if !permission.HasPermission(operation.ActivityPublish) {
 		return NewApiResponse[ResponseUploadFile](&ErrNoPermission, PermissionDenied, nil)
 	}
 	storeInfo, res := store.SaveImageFile(req.File)

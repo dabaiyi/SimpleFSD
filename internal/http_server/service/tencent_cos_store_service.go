@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"mime/multipart"
@@ -67,8 +67,8 @@ func (store *TencentCosStoreService) SaveUploadImages(req *RequestUploadFile) *A
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseUploadFile](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := Permission(req.Permission)
-	if !permission.HasPermission(ActivityPublish) {
+	permission := operation.Permission(req.Permission)
+	if !permission.HasPermission(operation.ActivityPublish) {
 		return NewApiResponse[ResponseUploadFile](&ErrNoPermission, PermissionDenied, nil)
 	}
 	storeInfo, res := store.SaveImageFile(req.File)

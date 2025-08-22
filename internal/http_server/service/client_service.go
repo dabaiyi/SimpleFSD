@@ -4,10 +4,8 @@ package service
 import (
 	"errors"
 	c "github.com/half-nothing/fsd-server/internal/config"
-	"github.com/half-nothing/fsd-server/internal/fsd_server/database"
-	. "github.com/half-nothing/fsd-server/internal/fsd_server/interfaces/service"
 	"github.com/half-nothing/fsd-server/internal/interfaces/fsd"
-	database3 "github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
 	"github.com/half-nothing/fsd-server/internal/utils"
 	"time"
@@ -18,13 +16,20 @@ type ClientService struct {
 	clientManager fsd.ClientManagerInterface
 	emailService  EmailServiceInterface
 	config        *c.HttpServerConfig
+	userOperation operation.UserOperationInterface
 }
 
-func NewClientService(config *c.HttpServerConfig, clientManager fsd.ClientManagerInterface, emailService EmailServiceInterface) *ClientService {
+func NewClientService(
+	config *c.HttpServerConfig,
+	clientManager fsd.ClientManagerInterface,
+	emailService EmailServiceInterface,
+	userOperation operation.UserOperationInterface,
+) *ClientService {
 	service := &ClientService{
 		clientManager: clientManager,
 		emailService:  emailService,
 		config:        config,
+		userOperation: userOperation,
 	}
 	service.onlineClient = utils.NewCachedValue[OnlineClients](config.CacheDuration, func() *OnlineClients { return service.getOnlineClient() })
 	return service
@@ -77,6 +82,7 @@ func (clientService *ClientService) getOnlineClient() *OnlineClients {
 				Heading:     client.Heading(),
 				Altitude:    client.Altitude(),
 				GroundSpeed: client.GroundSpeed(),
+				Paths:       client.Paths(),
 				FlightPlan:  client.FlightPlan(),
 				LogonTime:   client.History().StartTime.Format(time.DateTime),
 			}
@@ -105,8 +111,8 @@ func (clientService *ClientService) SendMessageToClient(req *RequestSendMessageT
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseSendMessageToClient](&ErrNoPermission, Unsatisfied, nil)
 	}
-	permission := database3.Permission(req.Permission)
-	if !permission.HasPermission(database3.ClientSendMessage) {
+	permission := operation.Permission(req.Permission)
+	if !permission.HasPermission(operation.ClientSendMessage) {
 		return NewApiResponse[ResponseSendMessageToClient](&ErrNoPermission, Unsatisfied, nil)
 	}
 	if err := clientService.clientManager.SendRawMessageTo(req.Cid, req.SendTo, req.Message); errors.Is(err, fsd.ErrCallsignNotFound) {
@@ -122,12 +128,14 @@ func (clientService *ClientService) KillClient(req *RequestKillClient) *ApiRespo
 	if req.Uid <= 0 || req.TargetCallsign == "" {
 		return NewApiResponse[ResponseKillClient](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	user, res := CallDBFuncAndCheckError[database3.User, ResponseKillClient](func() (*database3.User, error) { return database.GetUserById(req.Uid) })
+	user, res := CallDBFuncAndCheckError[operation.User, ResponseKillClient](func() (*operation.User, error) {
+		return clientService.userOperation.GetUserByUid(req.Uid)
+	})
 	if res != nil {
 		return res
 	}
-	permission := database3.Permission(user.Permission)
-	if !permission.HasPermission(database3.ClientKill) {
+	permission := operation.Permission(user.Permission)
+	if !permission.HasPermission(operation.ClientKill) {
 		return NewApiResponse[ResponseKillClient](&ErrNoPermission, Unsatisfied, nil)
 	}
 	client, ok := clientService.clientManager.GetClient(req.TargetCallsign)
