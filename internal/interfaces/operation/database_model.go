@@ -5,22 +5,22 @@ import (
 )
 
 type User struct {
-	ID              uint            `gorm:"primarykey" json:"-"`
-	Username        string          `gorm:"size:64;uniqueIndex;not null" json:"username"`
-	Email           string          `gorm:"size:128;uniqueIndex;not null" json:"email"`
-	Cid             int             `gorm:"uniqueIndex;not null" json:"cid"`
-	Password        string          `gorm:"size:128;not null" json:"-"`
-	QQ              int             `gorm:"default:0" json:"qq"`
-	Rating          int             `gorm:"default:0" json:"rating"`
-	Permission      int64           `gorm:"default:0" json:"permission"`
-	TotalPilotTime  int             `gorm:"default:0" json:"total_pilot_time"`
-	TotalAtcTime    int             `gorm:"default:0" json:"total_atc_time"`
-	FlightPlans     []FlightPlan    `gorm:"foreignKey:Cid;references:Cid" json:"-"`
-	OnlineHistories []History       `gorm:"foreignKey:Cid;references:Cid" json:"-"`
-	ActivityAtc     []ActivityATC   `gorm:"foreignKey:Cid;references:Cid" json:"-"`
-	ActivityPilot   []ActivityPilot `gorm:"foreignKey:Cid;references:Cid" json:"-"`
-	CreatedAt       time.Time       `json:"-"`
-	UpdatedAt       time.Time       `json:"-"`
+	ID              uint             `gorm:"primarykey" json:"-"`
+	Username        string           `gorm:"size:64;uniqueIndex;not null" json:"username"`
+	Email           string           `gorm:"size:128;uniqueIndex;not null" json:"email"`
+	Cid             int              `gorm:"uniqueIndex;not null" json:"cid"`
+	Password        string           `gorm:"size:128;not null" json:"-"`
+	QQ              int              `gorm:"default:0" json:"qq"`
+	Rating          int              `gorm:"default:0" json:"rating"`
+	Permission      int64            `gorm:"default:0" json:"permission"`
+	TotalPilotTime  int              `gorm:"default:0" json:"total_pilot_time"`
+	TotalAtcTime    int              `gorm:"default:0" json:"total_atc_time"`
+	FlightPlans     []*FlightPlan    `gorm:"foreignKey:Cid;references:Cid" json:"-"`
+	OnlineHistories []*History       `gorm:"foreignKey:Cid;references:Cid" json:"-"`
+	ActivityAtc     []*ActivityATC   `gorm:"foreignKey:Cid;references:Cid" json:"-"`
+	ActivityPilot   []*ActivityPilot `gorm:"foreignKey:Cid;references:Cid" json:"-"`
+	CreatedAt       time.Time        `json:"-"`
+	UpdatedAt       time.Time        `json:"-"`
 }
 
 type FlightPlan struct {
@@ -61,22 +61,22 @@ type History struct {
 }
 
 type Activity struct {
-	ID               uint               `gorm:"primarykey" json:"id"`
-	Publisher        int                `gorm:"index;not null" json:"publisher"`
-	Title            string             `gorm:"size:128;not null" json:"title"`
-	ImageUrl         string             `gorm:"size:128;not null" json:"image_url"`
-	ActiveTime       time.Time          `gorm:"not null" json:"active_time"`
-	DepartureAirport string             `gorm:"size:4;not null" json:"departure_airport"`
-	ArrivalAirport   string             `gorm:"size:4;not null" json:"arrival_airport"`
-	Route            string             `gorm:"size:128;not null" json:"route"`
-	Distance         int                `gorm:"default:0;not null" json:"distance"`
-	Status           int                `gorm:"default:0;not null" json:"status"`
-	NOTAMS           string             `gorm:"type:text;not null" json:"NOTAMS"`
-	Facilities       []ActivityFacility `gorm:"foreignKey:ActivityId;references:ID" json:"facilities"`
-	Controllers      []ActivityATC      `gorm:"foreignKey:ActivityId;references:ID" json:"controllers"`
-	Pilots           []ActivityPilot    `gorm:"foreignKey:ActivityId;references:ID" json:"pilots"`
-	CreatedAt        time.Time          `json:"-"`
-	UpdatedAt        time.Time          `json:"-"`
+	ID               uint                `gorm:"primarykey" json:"id"`
+	Publisher        int                 `gorm:"index;not null" json:"publisher"`
+	Title            string              `gorm:"size:128;not null" json:"title"`
+	ImageUrl         string              `gorm:"size:128;not null" json:"image_url"`
+	ActiveTime       time.Time           `gorm:"not null" json:"active_time"`
+	DepartureAirport string              `gorm:"size:4;not null" json:"departure_airport"`
+	ArrivalAirport   string              `gorm:"size:4;not null" json:"arrival_airport"`
+	Route            string              `gorm:"size:128;not null" json:"route"`
+	Distance         int                 `gorm:"default:0;not null" json:"distance"`
+	Status           int                 `gorm:"default:0;not null" json:"status"`
+	NOTAMS           string              `gorm:"type:text;not null" json:"NOTAMS"`
+	Facilities       []*ActivityFacility `gorm:"foreignKey:ActivityId;references:ID" json:"facilities"`
+	Controllers      []*ActivityATC      `gorm:"foreignKey:ActivityId;references:ID" json:"controllers"`
+	Pilots           []*ActivityPilot    `gorm:"foreignKey:ActivityId;references:ID" json:"pilots"`
+	CreatedAt        time.Time           `json:"-"`
+	UpdatedAt        time.Time           `json:"-"`
 }
 
 type ActivityFacility struct {

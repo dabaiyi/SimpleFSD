@@ -1,34 +1,23 @@
-// Package operation
 package database
 
 import (
 	"context"
 	"fmt"
-	database2 "github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	. "github.com/half-nothing/fsd-server/internal/interfaces/operation"
 	"gorm.io/gorm"
 	"time"
 )
 
-type ActivityStatus int
+type ActivityOperation struct {
+	db *gorm.DB
+}
 
-const (
-	Open     ActivityStatus = iota // 报名中
-	InActive                       // 活动中
-	Closed                         // 已结束
-)
+func NewActivityOperation(db *gorm.DB) *ActivityOperation {
+	return &ActivityOperation{db: db}
+}
 
-type ActivityPilotStatus int
-
-const (
-	Signed    ActivityPilotStatus = iota // 已报名
-	Clearance                            // 已放行
-	Takeoff                              // 已起飞
-	Landing                              // 已落地
-)
-
-func (user *database2.User) NewActivity(title string, imageUrl string, activeTime time.Time, dep string,
-	arr string, route string, distance int, notams string) *database2.Activity {
-	return &database2.Activity{
+func (activityOperation *ActivityOperation) NewActivity(user *User, title string, imageUrl string, activeTime time.Time, dep string, arr string, route string, distance int, notams string) (activity *Activity) {
+	return &Activity{
 		Publisher:        user.Cid,
 		Title:            title,
 		ImageUrl:         imageUrl,
@@ -42,26 +31,26 @@ func (user *database2.User) NewActivity(title string, imageUrl string, activeTim
 	}
 }
 
-func (ac *database2.Activity) NewActivityFacility(rating int, callsign string, frequency float64) *database2.ActivityFacility {
-	return &database2.ActivityFacility{
-		ActivityId: ac.ID,
+func (activityOperation *ActivityOperation) NewActivityFacility(activity *Activity, rating int, callsign string, frequency float64) (activityFacility *ActivityFacility) {
+	return &ActivityFacility{
+		ActivityId: activity.ID,
 		MinRating:  rating,
 		Callsign:   callsign,
 		Frequency:  fmt.Sprintf("%.3f", frequency),
 	}
 }
 
-func (ac *database2.Activity) NewActivityAtc(facility *database2.ActivityFacility) *database2.ActivityATC {
-	return &database2.ActivityATC{
-		ActivityId: ac.ID,
+func (activityOperation *ActivityOperation) NewActivityAtc(activity *Activity, facility *ActivityFacility) (activityAtc *ActivityATC) {
+	return &ActivityATC{
+		ActivityId: activity.ID,
 		FacilityId: facility.ID,
 		Cid:        0,
 	}
 }
 
-func (ac *database2.Activity) NewActivityPilot(user *database2.User, callsign string, aircraftType string) *database2.ActivityPilot {
-	return &database2.ActivityPilot{
-		ActivityId:   ac.ID,
+func (activityOperation *ActivityOperation) NewActivityPilot(activity *Activity, user *User, callsign string, aircraftType string) (activityPilot *ActivityPilot) {
+	return &ActivityPilot{
+		ActivityId:   activity.ID,
 		Cid:          user.Cid,
 		Callsign:     callsign,
 		AircraftType: aircraftType,
@@ -69,61 +58,55 @@ func (ac *database2.Activity) NewActivityPilot(user *database2.User, callsign st
 	}
 }
 
-func GetActivities(startDay, endDay time.Time) ([]*database2.Activity, error) {
-	activities := make([]*database2.Activity, 0)
-
+func (activityOperation *ActivityOperation) GetActivities(startDay, endDay time.Time) (activities []*Activity, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).Where("active_time between ? and ?", startDay, endDay).Find(&activities).Error
-
-	return activities, err
+	err = activityOperation.db.WithContext(ctx).Where("active_time between ? and ?", startDay, endDay).Find(&activities).Error
+	return
 }
 
-func GetActivityById(id uint) (*database2.Activity, error) {
-	activity := &database2.Activity{}
-
+func (activityOperation *ActivityOperation) GetActivityById(id uint) (activity *Activity, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).
+	err = activityOperation.db.WithContext(ctx).
 		Preload("Facilities").
 		Preload("Pilots").
 		Preload("Controllers").
 		Where("id = ?", id).
 		First(&activity).
 		Error
-
-	return activity, err
+	return
 }
 
-func (ac *database2.Activity) Save() error {
+func (activityOperation *ActivityOperation) SaveActivity(activity *Activity) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	return database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return tx.WithContext(ctx).Save(ac).Error
+	return activityOperation.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.WithContext(ctx).Save(activity).Error
 	})
 }
 
-func (ac *database2.Activity) Delete() error {
-	return database.Transaction(func(tx *gorm.DB) error {
+func (activityOperation *ActivityOperation) DeleteActivity(activity *Activity) (err error) {
+	return activityOperation.db.Transaction(func(tx *gorm.DB) error {
 		ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 		defer cancel()
 
 		if err := tx.WithContext(ctx).
-			Where("activity_id = ?", ac.ID).
-			Delete(&database2.ActivityPilot{}).Error; err != nil {
+			Where("activity_id = ?", activity.ID).
+			Delete(&ActivityPilot{}).Error; err != nil {
 			return fmt.Errorf("fail to delete activity pilots: %w", err)
 		}
 
 		if err := tx.WithContext(ctx).
-			Where("activity_id = ?", ac.ID).
-			Delete(&database2.ActivityATC{}).Error; err != nil {
+			Where("activity_id = ?", activity.ID).
+			Delete(&ActivityATC{}).Error; err != nil {
 			return fmt.Errorf("fail to delete activity atcs: %w", err)
 		}
 
-		if err := tx.WithContext(ctx).Delete(ac).Error; err != nil {
+		if err := tx.WithContext(ctx).Delete(activity).Error; err != nil {
 			return fmt.Errorf("fail to delete activity: %w", err)
 		}
 
@@ -131,98 +114,100 @@ func (ac *database2.Activity) Delete() error {
 	})
 }
 
-func (ac *database2.Activity) GetPilots() ([]database2.ActivityPilot, error) {
+func (activityOperation *ActivityOperation) GetActivityPilots(activity *Activity) (pilots []*ActivityPilot, err error) {
+	if activity.Pilots != nil {
+		return activity.Pilots, nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	var pilots []database2.ActivityPilot
-	err := database.WithContext(ctx).
-		Where("activity_id = ?", ac.ID).
+	err = activityOperation.db.WithContext(ctx).
+		Where("activity_id = ?", activity.ID).
 		Find(&pilots).Error
-	return pilots, err
+	return
 }
 
-func (ac *database2.Activity) GetATCs() ([]database2.ActivityATC, error) {
+func (activityOperation *ActivityOperation) GetActivityATCs(activity *Activity) (atcs []*ActivityATC, err error) {
+	if activity.Controllers != nil {
+		return activity.Controllers, nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	var atcs []database2.ActivityATC
-	err := database.WithContext(ctx).
-		Where("activity_id = ?", ac.ID).
+	err = activityOperation.db.WithContext(ctx).
+		Where("activity_id = ?", activity.ID).
 		Find(&atcs).Error
-	return atcs, err
+	return
 }
 
-func (ac *database2.Activity) setStatus(status ActivityStatus) error {
+func (activityOperation *ActivityOperation) GetActivityFacilities(activity *Activity) (facilities []*ActivityFacility, err error) {
+	if activity.Facilities != nil {
+		return activity.Facilities, nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).Model(ac).Update("status", int(status)).Error
-	return err
+	err = activityOperation.db.WithContext(ctx).
+		Where("activity_id = ?", activity.ID).
+		Find(&facilities).Error
+	return
 }
 
-func (ac *database2.Activity) SetOpen() error {
-	return ac.setStatus(Open)
-}
-
-func (ac *database2.Activity) SetInActive() error {
-	return ac.setStatus(InActive)
-}
-
-func (ac *database2.Activity) SetClosed() error {
-	return ac.setStatus(Closed)
-}
-
-func (acp *database2.ActivityPilot) Save() error {
+func (activityOperation *ActivityOperation) SetActivityStatus(activity *Activity, status ActivityStatus) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
-	err := database.WithContext(ctx).Save(acp).Error
-	return err
+	return activityOperation.db.WithContext(ctx).Model(activity).Update("status", int(status)).Error
 }
 
-func (acp *database2.ActivityPilot) setStatus(status ActivityPilotStatus) error {
+func (activityOperation *ActivityOperation) SetActivityStatusOpen(activity *Activity) (err error) {
+	return activityOperation.SetActivityStatus(activity, Open)
+}
+
+func (activityOperation *ActivityOperation) SetActivityStatusActive(activity *Activity) (err error) {
+	return activityOperation.SetActivityStatus(activity, InActive)
+}
+
+func (activityOperation *ActivityOperation) SetActivityStatusClosed(activity *Activity) (err error) {
+	return activityOperation.SetActivityStatus(activity, Closed)
+}
+
+func (activityOperation *ActivityOperation) SaveActivityPilot(activityPilot *ActivityPilot) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-
-	err := database.WithContext(ctx).Model(acp).Update("status", int(status)).Error
-	return err
+	return activityOperation.db.WithContext(ctx).Save(activityPilot).Error
 }
 
-func (acp *database2.ActivityPilot) SetSigned() error {
-	return acp.setStatus(Signed)
-}
-
-func (acp *database2.ActivityPilot) SetClearance() error {
-	return acp.setStatus(Clearance)
-}
-
-func (acp *database2.ActivityPilot) SetTakeoff() error {
-	return acp.setStatus(Takeoff)
-}
-
-func (acp *database2.ActivityPilot) SetLanding() error {
-	return acp.setStatus(Landing)
-}
-
-func (aca *database2.ActivityATC) Save() error {
+func (activityOperation *ActivityOperation) SetActivityPilotStatus(activityPilot *ActivityPilot, status ActivityPilotStatus) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-
-	err := database.WithContext(ctx).Save(aca).Error
-	return err
+	return activityOperation.db.WithContext(ctx).Model(activityPilot).Update("status", int(status)).Error
 }
 
-func (aca *database2.ActivityATC) Cancel() error {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
-	err := database.WithContext(ctx).Model(aca).Update("cid", 0).Error
-	return err
+func (activityOperation *ActivityOperation) SetActivityPilotStatusSigned(activityPilot *ActivityPilot) (err error) {
+	return activityOperation.SetActivityPilotStatus(activityPilot, Signed)
 }
 
-func (aca *database2.ActivityATC) SetAtc(user *database2.User) error {
+func (activityOperation *ActivityOperation) SetActivityPilotStatusClearance(activityPilot *ActivityPilot) (err error) {
+	return activityOperation.SetActivityPilotStatus(activityPilot, Clearance)
+}
+
+func (activityOperation *ActivityOperation) SetActivityPilotStatusTakeoff(activityPilot *ActivityPilot) (err error) {
+	return activityOperation.SetActivityPilotStatus(activityPilot, Takeoff)
+}
+
+func (activityOperation *ActivityOperation) SetActivityPilotStatusLanding(activityPilot *ActivityPilot) (err error) {
+	return activityOperation.SetActivityPilotStatus(activityPilot, Landing)
+}
+
+func (activityOperation *ActivityOperation) SaveActivityAtc(activityAtc *ActivityATC) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
-	err := database.WithContext(ctx).Model(aca).Update("cid", user.Cid).Error
-	return err
+	return activityOperation.db.WithContext(ctx).Save(activityAtc).Error
+}
+
+func (activityOperation *ActivityOperation) SetActivityFacility(activity *ActivityFacility, user *User) (err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	return database.WithContext(ctx).Model(activity).Update("cid", user.Cid).Error
 }
