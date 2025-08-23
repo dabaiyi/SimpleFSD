@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"time"

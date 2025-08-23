@@ -1,4 +1,4 @@
-# fsd-server
+# SimpleFSD
 
 [English](docs/README_en.md)
 
@@ -428,22 +428,22 @@ Copyright (c) 2025 Half_nothing
 
 在[CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)中查阅
 
-[ReleaseCard]: https://img.shields.io/github/v/release/Flyleague-Collection/fsd-server?style=for-the-badge&logo=github
+[ReleaseCard]: https://img.shields.io/github/v/release/Flyleague-Collection/SimpleFSD?style=for-the-badge&logo=github
 
-[ReleaseDataCard]: https://img.shields.io/github/release-date/Flyleague-Collection/fsd-server?display_date=published_at&style=for-the-badge&logo=github
+[ReleaseDataCard]: https://img.shields.io/github/release-date/Flyleague-Collection/SimpleFSD?display_date=published_at&style=for-the-badge&logo=github
 
-[LastCommitCard]: https://img.shields.io/github/last-commit/Flyleague-Collection/fsd-server?display_timestamp=committer&style=for-the-badge&logo=github
+[LastCommitCard]: https://img.shields.io/github/last-commit/Flyleague-Collection/SimpleFSD?display_timestamp=committer&style=for-the-badge&logo=github
 
-[BuildStateCard]: https://img.shields.io/github/actions/workflow/status/Flyleague-Collection/fsd-server/go-build.yml?style=for-the-badge&logo=github
+[BuildStateCard]: https://img.shields.io/github/actions/workflow/status/Flyleague-Collection/SimpleFSD/go-build.yml?style=for-the-badge&logo=github
 
-[ProjectLanguageCard]: https://img.shields.io/github/languages/top/Flyleague-Collection/fsd-server?style=for-the-badge&logo=github
+[ProjectLanguageCard]: https://img.shields.io/github/languages/top/Flyleague-Collection/SimpleFSD?style=for-the-badge&logo=github
 
 [ProjectLicense]: https://img.shields.io/badge/License-MIT-blue?style=for-the-badge&logo=github
 
-[Release]: https://www.github.com/Flyleague-Collection/fsd-server/releases/latest
+[Release]: https://www.github.com/Flyleague-Collection/SimpleFSD/releases/latest
 
-[Action]: https://github.com/Flyleague-Collection/fsd-server/actions/workflows/go-build.yml
+[Action]: https://github.com/Flyleague-Collection/SimpleFSD/actions/workflows/go-build.yml
 
-[Issue]: https://github.com/Flyleague-Collection/fsd-server/issues/new
+[Issue]: https://github.com/Flyleague-Collection/SimpleFSD/issues/new
 
 [HttpApiDocs]: https://fsd.docs.half-nothing.cn/

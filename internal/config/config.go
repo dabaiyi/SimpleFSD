@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/half-nothing/fsd-server/internal/utils"
+	"github.com/half-nothing/simple-fsd/internal/utils"
 	"github.com/thanhpk/randstr"
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/gomail.v2"
@@ -24,11 +24,11 @@ import (
 )
 
 const (
-	AirportDataFileUrl              = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/data/airport.json"
-	EmailVerifyTemplateFileUrl      = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/email_verify.template"
-	ATCRatingChangeTemplateFileUrl  = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/atc_rating_change.template"
-	PermissionChangeTemplateFileUrl = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/permission_change.template"
-	KickedFromServerTemplateFileUrl = "https://raw.githubusercontent.com/Flyleague-Collection/fsd-server/refs/heads/main/template/kicked_from_server.template"
+	AirportDataFileUrl              = "https://raw.githubusercontent.com/Flyleague-Collection/SimpleFSD/refs/heads/main/data/airport.json"
+	EmailVerifyTemplateFileUrl      = "https://raw.githubusercontent.com/Flyleague-Collection/SimpleFSD/refs/heads/main/template/email_verify.template"
+	ATCRatingChangeTemplateFileUrl  = "https://raw.githubusercontent.com/Flyleague-Collection/SimpleFSD/refs/heads/main/template/atc_rating_change.template"
+	PermissionChangeTemplateFileUrl = "https://raw.githubusercontent.com/Flyleague-Collection/SimpleFSD/refs/heads/main/template/permission_change.template"
+	KickedFromServerTemplateFileUrl = "https://raw.githubusercontent.com/Flyleague-Collection/SimpleFSD/refs/heads/main/template/kicked_from_server.template"
 )
 
 type Item interface {

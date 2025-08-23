@@ -3,9 +3,9 @@ package service
 
 import (
 	"fmt"
-	c "github.com/half-nothing/fsd-server/internal/config"
-	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
+	c "github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/operation"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces/service"
 	"io"
 	"mime/multipart"
 	"os"

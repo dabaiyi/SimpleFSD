@@ -3,9 +3,9 @@ package packet
 import (
 	"bufio"
 	"fmt"
-	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/fsd"
-	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	c "github.com/half-nothing/simple-fsd/internal/config"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"net"
 	"sync/atomic"
 	"time"

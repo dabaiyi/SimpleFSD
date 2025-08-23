@@ -2,7 +2,7 @@
 package controller
 
 import (
-	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces/service"
 	"github.com/labstack/echo/v4"
 )
 

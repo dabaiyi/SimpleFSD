@@ -4,9 +4,9 @@ package service
 import (
 	"context"
 	"fmt"
-	c "github.com/half-nothing/fsd-server/internal/config"
-	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
+	c "github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/operation"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces/service"
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"mime/multipart"
 	"net/http"

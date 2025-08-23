@@ -1,12 +1,12 @@
 package main
 
 import (
-	c "github.com/half-nothing/fsd-server/internal/config"
-	"github.com/half-nothing/fsd-server/internal/database"
-	"github.com/half-nothing/fsd-server/internal/fsd_server"
-	"github.com/half-nothing/fsd-server/internal/http_server"
-	"github.com/half-nothing/fsd-server/internal/interfaces"
-	"github.com/half-nothing/fsd-server/internal/interfaces/fsd"
+	c "github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/database"
+	"github.com/half-nothing/simple-fsd/internal/fsd_server"
+	"github.com/half-nothing/simple-fsd/internal/http_server"
+	"github.com/half-nothing/simple-fsd/internal/interfaces"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
 )
 
 func main() {

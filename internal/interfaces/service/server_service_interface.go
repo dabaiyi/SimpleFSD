@@ -2,7 +2,7 @@
 package service
 
 import (
-	. "github.com/half-nothing/fsd-server/internal/interfaces/fsd"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
 )
 
 type ServerServiceInterface interface {

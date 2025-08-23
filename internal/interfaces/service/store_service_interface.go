@@ -3,7 +3,7 @@ package service
 
 import (
 	"fmt"
-	c "github.com/half-nothing/fsd-server/internal/config"
+	c "github.com/half-nothing/simple-fsd/internal/config"
 	"mime/multipart"
 	"path/filepath"
 	"slices"

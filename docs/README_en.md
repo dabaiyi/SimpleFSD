@@ -1,4 +1,4 @@
-# fsd-server
+# SimpleFSD
 
 [中文](../README.md)
 
@@ -436,7 +436,7 @@ No additional terms.
 
 ## Code of Conduct
 
-See [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+See [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md)
 
 [ReleaseCard]: https://img.shields.io/github/v/release/Flyleague-Collection/fsd-server?style=for-the-badge&logo=github
 

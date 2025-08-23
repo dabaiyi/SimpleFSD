@@ -2,7 +2,7 @@
 package service
 
 import (
-	"github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"time"
 )
 

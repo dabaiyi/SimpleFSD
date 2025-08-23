@@ -3,8 +3,8 @@ package database
 import (
 	"context"
 	"errors"
-	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/operation"
+	c "github.com/half-nothing/simple-fsd/internal/config"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

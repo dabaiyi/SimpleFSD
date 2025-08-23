@@ -2,7 +2,7 @@ package fsd
 
 import (
 	"fmt"
-	"github.com/half-nothing/fsd-server/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/config"
 	"time"
 )
 

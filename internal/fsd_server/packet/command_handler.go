@@ -3,10 +3,10 @@ package packet
 
 import (
 	"fmt"
-	c "github.com/half-nothing/fsd-server/internal/config"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/fsd"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/operation"
-	"github.com/half-nothing/fsd-server/internal/utils"
+	c "github.com/half-nothing/simple-fsd/internal/config"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces/operation"
+	"github.com/half-nothing/simple-fsd/internal/utils"
 	"strings"
 )
 

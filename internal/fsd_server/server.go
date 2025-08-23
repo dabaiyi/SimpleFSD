@@ -2,10 +2,10 @@ package fsd_server
 
 import (
 	"context"
-	c "github.com/half-nothing/fsd-server/internal/config"
-	"github.com/half-nothing/fsd-server/internal/fsd_server/packet"
-	. "github.com/half-nothing/fsd-server/internal/interfaces"
-	"github.com/half-nothing/fsd-server/internal/interfaces/fsd"
+	c "github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/fsd_server/packet"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
 	"net"
 	"time"
 )

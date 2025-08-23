@@ -3,7 +3,7 @@ package config
 
 import (
 	"errors"
-	"github.com/half-nothing/fsd-server/internal/utils"
+	"github.com/half-nothing/simple-fsd/internal/utils"
 	"strings"
 )
 

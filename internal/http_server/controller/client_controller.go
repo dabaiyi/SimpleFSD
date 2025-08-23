@@ -3,7 +3,7 @@ package controller
 
 import (
 	"github.com/golang-jwt/jwt/v5"
-	. "github.com/half-nothing/fsd-server/internal/interfaces/service"
+	. "github.com/half-nothing/simple-fsd/internal/interfaces/service"
 	"github.com/labstack/echo/v4"
 	"net/http"
 )
