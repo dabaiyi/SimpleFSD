@@ -148,11 +148,11 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 		storeService = impl.NewTencentCosStoreService(storeService, httpConfig.Store)
 	}
 
-	userService := impl.NewUserService(emailService, httpConfig, applicationContent.UserOperation())
+	userService := impl.NewUserService(emailService, httpConfig, applicationContent.UserOperation(), applicationContent.HistoryOperation(), storeService)
 	clientManager := packet.NewClientManager(applicationContent)
 	clientService := impl.NewClientService(httpConfig, clientManager, emailService, applicationContent.UserOperation())
 	serverService := impl.NewServerService(config.Server)
-	activityService := impl.NewActivityService(httpConfig, applicationContent.UserOperation(), applicationContent.ActivityOperation())
+	activityService := impl.NewActivityService(httpConfig, applicationContent.UserOperation(), applicationContent.ActivityOperation(), storeService)
 
 	userController := controller.NewUserHandler(userService)
 	emailController := controller.NewEmailController(emailService)
@@ -166,6 +166,7 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	apiGroup.POST("/codes", emailController.SendVerifyEmail)
 	apiGroup.GET("/profile", userController.GetCurrentUserProfileHandler, jwtMiddleware)
 	apiGroup.PATCH("/profile", userController.EditCurrentProfileHandler, jwtMiddleware)
+	apiGroup.GET("/history", userController.GetUserHistory, jwtMiddleware)
 
 	userGroup := apiGroup.Group("/users")
 	userGroup.POST("", userController.UserRegisterHandler)
@@ -187,6 +188,7 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 
 	activityGroup := apiGroup.Group("/activities")
 	activityGroup.GET("", activityController.GetActivities, jwtMiddleware)
+	activityGroup.GET("/list", activityController.GetActivitiesPage, jwtMiddleware)
 	activityGroup.GET("/:id", activityController.GetActivityInfo, jwtMiddleware)
 	activityGroup.POST("", activityController.AddActivity, jwtMiddleware)
 	activityGroup.DELETE("/:id", activityController.DeleteActivity, jwtMiddleware)
@@ -201,7 +203,7 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	fileGroup := apiGroup.Group("/files")
 	fileGroup.POST("/images", fileController.UploadImages, jwtMiddleware)
 
-	e.Use(middleware.Static(httpConfig.Store.LocalStorePath))
+	apiGroup.Use(middleware.Static(httpConfig.Store.LocalStorePath))
 
 	c.GetCleaner().Add(NewHttpServerShutdownCallback(e))
 

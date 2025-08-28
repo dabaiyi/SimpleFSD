@@ -10,15 +10,6 @@ import (
 	"strings"
 )
 
-// getUserId 转换客户端传递过来的cid为数据库可识别的模式
-func getUserId(cid string) UserId {
-	id := utils.StrToInt(cid, -1)
-	if id != -1 {
-		return IntUserId(id)
-	}
-	return StringUserId(cid)
-}
-
 func (ch *ConnectionHandler) checkPacketLength(data []string, requirement *CommandRequirement) (*Result, bool) {
 	length := len(data)
 	if length < requirement.RequireLength {
@@ -75,7 +66,7 @@ func (ch *ConnectionHandler) handleAddAtc(data []string, rawLine []byte) *Result
 	// #AA 2352_OBS SERVER 2352 2352 123456  1  9  1  0  29.86379 119.49287 100
 	// [0] [   1  ] [  2 ] [ 3] [ 4] [  5 ] [6][7][8][9] [  10  ] [   11  ] [12]
 	callsign := data[0]
-	cid := getUserId(data[3])
+	cid := GetUserId(data[3])
 	password := data[4]
 	protocol := utils.StrToInt(data[6], 0)
 	result := ch.verifyUserInfo(callsign, protocol, cid, password)
@@ -106,7 +97,7 @@ func (ch *ConnectionHandler) handleAddPilot(data []string, rawLine []byte) *Resu
 	//	#AP CES2352 SERVER 2352 123456  1   9  16  Half_nothing ZGHA
 	//  [0] [  1  ] [  2 ] [ 3] [  4 ] [5] [6] [7] [       8       ]
 	callsign := data[0]
-	cid := getUserId(data[2])
+	cid := GetUserId(data[2])
 	password := data[3]
 	protocol := utils.StrToInt(data[5], 0)
 	result := ch.verifyUserInfo(callsign, protocol, cid, password)

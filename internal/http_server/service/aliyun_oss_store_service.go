@@ -66,6 +66,24 @@ func (store *ALiYunOssStoreService) SaveImageFile(file *multipart.FileHeader) (*
 	return storeInfo, nil
 }
 
+func (store *ALiYunOssStoreService) DeleteImageFile(file string) (*StoreInfo, error) {
+	storeInfo, err := store.localStore.DeleteImageFile(file)
+	if err != nil {
+		return nil, err
+	}
+	storeInfo.RemotePath = strings.Replace(filepath.Join(store.config.RemoteStorePath, storeInfo.FileName), "\\", "/", -1)
+	delRequest := &oss.DeleteObjectRequest{
+		Bucket: oss.Ptr(store.config.Bucket),
+		Key:    oss.Ptr(storeInfo.RemotePath),
+	}
+	_, err = store.client.DeleteObject(context.TODO(), delRequest)
+	if err != nil {
+		c.ErrorF("Failed to delete image from remote storage: %v", err)
+		return nil, err
+	}
+	return storeInfo, nil
+}
+
 func (store *ALiYunOssStoreService) SaveUploadImages(req *RequestUploadFile) *ApiResponse[ResponseUploadFile] {
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseUploadFile](&ErrNoPermission, Unsatisfied, nil)
@@ -82,7 +100,7 @@ func (store *ALiYunOssStoreService) SaveUploadImages(req *RequestUploadFile) *Ap
 	if err != nil {
 		return NewApiResponse[ResponseUploadFile](&ErrFilePathFail, Unsatisfied, nil)
 	}
-	return NewApiResponse(&SuccessUploadFIle, Unsatisfied, &ResponseUploadFile{
+	return NewApiResponse(&SuccessUploadFile, Unsatisfied, &ResponseUploadFile{
 		FileSize:   req.File.Size,
 		AccessPath: accessUrl,
 	})

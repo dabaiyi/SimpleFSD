@@ -10,6 +10,7 @@ import (
 
 type ActivityControllerInterface interface {
 	GetActivities(ctx echo.Context) error
+	GetActivitiesPage(ctx echo.Context) error
 	GetActivityInfo(ctx echo.Context) error
 	AddActivity(ctx echo.Context) error
 	DeleteActivity(ctx echo.Context) error
@@ -37,6 +38,19 @@ func (controller ActivityController) GetActivities(ctx echo.Context) error {
 		return NewErrorResponse(ctx, &ErrLackParam)
 	}
 	return controller.activityService.GetActivities(data).Response(ctx)
+}
+
+func (controller ActivityController) GetActivitiesPage(ctx echo.Context) error {
+	data := &RequestGetActivitiesPage{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	return controller.activityService.GetActivitiesPage(data).Response(ctx)
 }
 
 func (controller ActivityController) GetActivityInfo(ctx echo.Context) error {

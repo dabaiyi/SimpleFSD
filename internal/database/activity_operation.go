@@ -69,6 +69,15 @@ func (activityOperation *ActivityOperation) GetActivities(startDay, endDay time.
 	return
 }
 
+func (activityOperation *ActivityOperation) GetActivitiesPage(page, pageSize int) (activities []*Activity, total int64, err error) {
+	activities = make([]*Activity, 0, pageSize)
+	ctx, cancel := context.WithTimeout(context.Background(), activityOperation.queryTimeout)
+	defer cancel()
+	activityOperation.db.WithContext(ctx).Model(&Activity{}).Select("id").Count(&total)
+	err = activityOperation.db.WithContext(ctx).Offset((page - 1) * pageSize).Limit(pageSize).Find(&activities).Error
+	return
+}
+
 func (activityOperation *ActivityOperation) GetActivityById(id uint) (activity *Activity, err error) {
 	activity = &Activity{}
 	ctx, cancel := context.WithTimeout(context.Background(), activityOperation.queryTimeout)

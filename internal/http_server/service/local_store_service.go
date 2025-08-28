@@ -73,7 +73,24 @@ func (store *LocalStoreService) SaveImageFile(file *multipart.FileHeader) (*Stor
 		return nil, &ErrFileSaveFail
 	}
 	return storeInfo, nil
+}
 
+func (store *LocalStoreService) DeleteImageFile(file string) (*StoreInfo, error) {
+	storeInfo := NewStoreInfo(IMAGES, store.config.FileLimit.ImageLimit, nil)
+
+	storeInfo.FileName = filepath.Join(store.config.FileLimit.ImageLimit.StorePrefix, filepath.Base(file))
+	storeInfo.FilePath = filepath.Join(store.config.FileLimit.ImageLimit.RootPath, storeInfo.FileName)
+	storeInfo.RemotePath = strings.Replace(storeInfo.FileName, "\\", "/", -1)
+
+	if !storeInfo.StoreInServer {
+		return storeInfo, nil
+	}
+
+	if err := os.Remove(storeInfo.FilePath); err != nil {
+		c.ErrorF("remove file error: %v", err)
+		return nil, err
+	}
+	return storeInfo, nil
 }
 
 func (store *LocalStoreService) SaveUploadImages(req *RequestUploadFile) *ApiResponse[ResponseUploadFile] {
@@ -88,7 +105,7 @@ func (store *LocalStoreService) SaveUploadImages(req *RequestUploadFile) *ApiRes
 	if res != nil {
 		return NewApiResponse[ResponseUploadFile](res, Unsatisfied, nil)
 	}
-	return NewApiResponse(&SuccessUploadFIle, Unsatisfied, &ResponseUploadFile{
+	return NewApiResponse(&SuccessUploadFile, Unsatisfied, &ResponseUploadFile{
 		FileSize:   req.File.Size,
 		AccessPath: storeInfo.RemotePath,
 	})

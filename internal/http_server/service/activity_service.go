@@ -14,31 +14,59 @@ type ActivityService struct {
 	config            *c.HttpServerConfig
 	userOperation     operation.UserOperationInterface
 	activityOperation operation.ActivityOperationInterface
+	storeService      StoreServiceInterface
 }
 
 func NewActivityService(
 	config *c.HttpServerConfig,
 	userOperation operation.UserOperationInterface,
 	activityOperation operation.ActivityOperationInterface,
+	storeService StoreServiceInterface,
 ) *ActivityService {
 	return &ActivityService{
 		config:            config,
 		userOperation:     userOperation,
 		activityOperation: activityOperation,
+		storeService:      storeService,
 	}
 }
 
 var SuccessGetActivities = ApiStatus{StatusName: "GET_ACTIVITIES", Description: "成功获取活动", HttpCode: Ok}
 
 func (activityService *ActivityService) GetActivities(req *RequestGetActivities) *ApiResponse[ResponseGetActivities] {
-	firstDay, _ := time.Parse("2006-01", req.Time)
-	nextMonth := firstDay.AddDate(0, 1, 0)
-	lastDay := nextMonth.Add(-time.Second)
+	targetMonth, _ := time.Parse("2006-01", req.Time)
+	firstDay := targetMonth.AddDate(0, -1, 0)
+	lastDay := targetMonth.AddDate(0, 2, 0).Add(-time.Second)
 	activities, err := activityService.activityOperation.GetActivities(firstDay, lastDay)
 	if err != nil {
 		return NewApiResponse[ResponseGetActivities](&ErrDatabaseFail, Unsatisfied, nil)
 	}
 	return NewApiResponse[ResponseGetActivities](&SuccessGetActivities, Unsatisfied, &ResponseGetActivities{Items: activities})
+}
+
+var SuccessGetActivitiesPage = ApiStatus{StatusName: "GET_ACTIVITIES_PAGE", Description: "成功获取活动分页", HttpCode: Ok}
+
+func (activityService *ActivityService) GetActivitiesPage(req *RequestGetActivitiesPage) *ApiResponse[ResponseGetActivitiesPage] {
+	if req.Page <= 0 || req.PageSize <= 0 {
+		return NewApiResponse[ResponseGetActivitiesPage](&ErrIllegalParam, Unsatisfied, nil)
+	}
+	if req.Permission <= 0 {
+		return NewApiResponse[ResponseGetActivitiesPage](&ErrNoPermission, Unsatisfied, nil)
+	}
+	permission := operation.Permission(req.Permission)
+	if !permission.HasPermission(operation.ActivityShowList) {
+		return NewApiResponse[ResponseGetActivitiesPage](&ErrNoPermission, Unsatisfied, nil)
+	}
+	activities, total, err := activityService.activityOperation.GetActivitiesPage(req.Page, req.PageSize)
+	if err != nil {
+		return NewApiResponse[ResponseGetActivitiesPage](&ErrDatabaseFail, Unsatisfied, nil)
+	}
+	return NewApiResponse(&SuccessGetActivitiesPage, Unsatisfied, &ResponseGetActivitiesPage{
+		Items:    activities,
+		Page:     req.Page,
+		PageSize: req.PageSize,
+		Total:    total,
+	})
 }
 
 var SuccessGetActivityInfo = ApiStatus{StatusName: "GET_ACTIVITY_INFO", Description: "成功获取活动信息", HttpCode: Ok}
@@ -240,7 +268,13 @@ func (activityService *ActivityService) EditActivity(req *RequestEditActivity) *
 	if req.Title != nil {
 		updateInfo["title"] = req.Title
 	}
-	if req.ImageUrl != nil {
+	if req.ImageUrl != nil && *req.ImageUrl != activity.ImageUrl {
+		if activity.ImageUrl != "" {
+			_, err := activityService.storeService.DeleteImageFile(activity.ImageUrl)
+			if err != nil {
+				c.ErrorF("err while delete old activity image, %v", err)
+			}
+		}
 		updateInfo["image_url"] = req.ImageUrl
 	}
 	if req.ActiveTime != nil {

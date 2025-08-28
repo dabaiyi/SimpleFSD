@@ -6,6 +6,7 @@ type Permission int64
 // 权限节点上限是64, 超过64需要使用切片
 const (
 	AdminEntry Permission = 1 << iota
+	ControllerEntry
 	UserShowList
 	UserGetProfile
 	UserAdd
@@ -13,6 +14,7 @@ const (
 	UserEditPermission
 	UserEditRating
 	ActivityPublish
+	ActivityShowList
 	ActivityEditContent
 	ActivityEditFacility
 	ActivityEditState
@@ -24,6 +26,7 @@ const (
 
 var PermissionMap = map[string]Permission{
 	"AdminEntry":             AdminEntry,
+	"ControllerEntry":        ControllerEntry,
 	"UserShowList":           UserShowList,
 	"UserGetProfile":         UserGetProfile,
 	"UserAdd":                UserAdd,
@@ -31,6 +34,7 @@ var PermissionMap = map[string]Permission{
 	"UserEditPermission":     UserEditPermission,
 	"UserEditRating":         UserEditRating,
 	"ActivityPublish":        ActivityPublish,
+	"ActivityShowList":       ActivityShowList,
 	"ActivityEditContent":    ActivityEditContent,
 	"ActivityEditFacility":   ActivityEditFacility,
 	"ActivityEditState":      ActivityEditState,

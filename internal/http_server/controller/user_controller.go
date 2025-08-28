@@ -19,6 +19,7 @@ type UserHandlerInterface interface {
 	GetUsers(ctx echo.Context) error
 	EditUserPermission(ctx echo.Context) error
 	EditUserRating(ctx echo.Context) error
+	GetUserHistory(ctx echo.Context) error
 }
 
 type UserController struct {
@@ -140,4 +141,14 @@ func (controller *UserController) EditUserRating(ctx echo.Context) error {
 	data.Uid = claim.Uid
 	data.Permission = claim.Permission
 	return controller.service.EditUserRating(data).Response(ctx)
+}
+
+func (controller *UserController) GetUserHistory(ctx echo.Context) error {
+	data := &RequestGetUserHistory{}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	data.Cid = claim.Cid
+	return controller.service.GetUserHistory(data).Response(ctx)
 }

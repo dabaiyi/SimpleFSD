@@ -9,4 +9,11 @@ type HistoryOperationInterface interface {
 	SaveHistory(history *History) (err error)
 	// EndRecordAndSaveHistory 结束联飞记录并保存到数据库, 当err为nil时保存成功
 	EndRecordAndSaveHistory(history *History) (err error)
+	// GetUserHistory 获取用户最近十次的连线记录, 当err为nil时返回值userHistory有效
+	GetUserHistory(cid int) (userHistory *UserHistory, err error)
+}
+
+type UserHistory struct {
+	Pilots      []History `json:"pilots"`
+	Controllers []History `json:"controllers"`
 }

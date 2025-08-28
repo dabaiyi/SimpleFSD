@@ -48,6 +48,8 @@ type ActivityOperationInterface interface {
 	NewActivityPilot(activity *Activity, cid int, callsign string, aircraftType string) (activityPilot *ActivityPilot)
 	// GetActivities 获取指定日期内的所有活动, 当err为nil时返回值activities有效
 	GetActivities(startDay, endDay time.Time) (activities []*Activity, err error)
+	// GetActivitiesPage 获取分页用户数据, 当err为nil时返回值activities有效, total表示数据总数目
+	GetActivitiesPage(page, pageSize int) (activities []*Activity, total int64, err error)
 	// GetActivityById 通过活动Id获取活动详细内容(包括外键关联的内容), 当err为nil时返回值activity有效
 	GetActivityById(id uint) (activity *Activity, err error)
 	// GetOnlyActivityById 通过活动Id获取活动详细内容(不包括外键关联的内容), 当err为nil时返回值activity有效

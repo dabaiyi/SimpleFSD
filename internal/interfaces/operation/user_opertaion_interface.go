@@ -3,6 +3,7 @@ package operation
 
 import (
 	"errors"
+	"github.com/half-nothing/simple-fsd/internal/utils"
 	"gorm.io/gorm"
 )
 
@@ -23,11 +24,19 @@ type UserId interface {
 	GetUser(userOperation UserOperationInterface) (*User, error)
 }
 
+func GetUserId(userId string) UserId {
+	id := utils.StrToInt(userId, -1)
+	if id == -1 {
+		return StringUserId(userId)
+	}
+	return IntUserId(id)
+}
+
 type IntUserId int
 type StringUserId string
 
 func (id IntUserId) GetUser(userOperation UserOperationInterface) (*User, error) {
-	return userOperation.GetUserByCid(uint(id))
+	return userOperation.GetUserByCid(int(id))
 }
 
 func (id StringUserId) GetUser(userOperation UserOperationInterface) (*User, error) {
@@ -39,7 +48,7 @@ type UserOperationInterface interface {
 	// GetUserByUid 通过主键ID获取用户, 当err为nil时返回值user有效
 	GetUserByUid(uid uint) (user *User, err error)
 	// GetUserByCid 通过Cid获取用户, 当err为nil时返回值user有效
-	GetUserByCid(cid uint) (user *User, err error)
+	GetUserByCid(cid int) (user *User, err error)
 	// GetUserByUsername 通过用户名获取用户, 当err为nil时返回值user有效
 	GetUserByUsername(username string) (user *User, err error)
 	// GetUserByEmail 通过邮箱获取用户, 当err为nil时返回值user有效

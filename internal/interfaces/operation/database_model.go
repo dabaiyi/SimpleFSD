@@ -11,6 +11,7 @@ type User struct {
 	Email           string           `gorm:"size:128;uniqueIndex;not null" json:"email"`
 	Cid             int              `gorm:"uniqueIndex;not null" json:"cid"`
 	Password        string           `gorm:"size:128;not null" json:"-"`
+	AvatarUrl       string           `gorm:"size:128;not null;default:''" json:"avatar_url"`
 	QQ              int              `gorm:"default:0" json:"qq"`
 	Rating          int              `gorm:"default:0" json:"rating"`
 	Permission      int64            `gorm:"default:0" json:"permission"`
@@ -50,13 +51,13 @@ type FlightPlan struct {
 }
 
 type History struct {
-	ID         uint      `gorm:"primarykey"`
-	Cid        int       `gorm:"index;not null"`
-	Callsign   string    `gorm:"size:16;index;not null"`
-	StartTime  time.Time `gorm:"not null"`
-	EndTime    time.Time `gorm:"not null"`
-	OnlineTime int       `gorm:"default:0;not null"`
-	IsAtc      bool      `gorm:"default:0;not null"`
+	ID         uint      `gorm:"primarykey" json:"-"`
+	Cid        int       `gorm:"index;not null" json:"-"`
+	Callsign   string    `gorm:"size:16;index;not null" json:"callsign"`
+	StartTime  time.Time `gorm:"not null" json:"start_time"`
+	EndTime    time.Time `gorm:"not null" json:"end_time"`
+	OnlineTime int       `gorm:"default:0;not null" json:"online_time"`
+	IsAtc      bool      `gorm:"default:0;not null" json:"-"`
 	CreatedAt  time.Time `json:"-"`
 	UpdatedAt  time.Time `json:"-"`
 }
@@ -67,8 +68,8 @@ type Activity struct {
 	Title            string              `gorm:"size:128;not null" json:"title"`
 	ImageUrl         string              `gorm:"size:128;not null" json:"image_url"`
 	ActiveTime       time.Time           `gorm:"not null" json:"active_time"`
-	DepartureAirport string              `gorm:"size:4;not null" json:"departure_airport"`
-	ArrivalAirport   string              `gorm:"size:4;not null" json:"arrival_airport"`
+	DepartureAirport string              `gorm:"size:64;not null" json:"departure_airport"`
+	ArrivalAirport   string              `gorm:"size:64;not null" json:"arrival_airport"`
 	Route            string              `gorm:"size:128;not null" json:"route"`
 	Distance         int                 `gorm:"default:0;not null" json:"distance"`
 	Status           int                 `gorm:"default:0;not null" json:"status"`

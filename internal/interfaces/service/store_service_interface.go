@@ -18,7 +18,7 @@ var (
 	ErrFileOverSize       = ApiStatus{"FILE_OVER_SIZE", "文件过大", BadRequest}
 	ErrFileExtUnsupported = ApiStatus{"FILE_EXT_UNSUPPORTED", "不支持的文件类型", BadRequest}
 	ErrFileNameIllegal    = ApiStatus{"FILE_NAME_ILLEGAL", "文件名不合法", BadRequest}
-	SuccessUploadFIle     = ApiStatus{"UPLOAD_FILE", "文件上传成功", Ok}
+	SuccessUploadFile     = ApiStatus{"UPLOAD_FILE", "文件上传成功", Ok}
 )
 
 type FileType int
@@ -50,7 +50,7 @@ func NewStoreInfo(fileType FileType, fileLimit *c.HttpServerStoreFileLimit, file
 		FilePath:      "",
 		FileName:      "",
 		RemotePath:    "",
-		FileExt:       filepath.Ext(file.Filename),
+		FileExt:       "",
 		FileContent:   file,
 		StoreInServer: fileLimit.StoreInServer,
 	}
@@ -73,6 +73,7 @@ func (fileType FileType) GenerateStoreInfo(fileLimit *c.HttpServerStoreFileLimit
 
 	storeInfo := NewStoreInfo(fileType, fileLimit, file)
 
+	storeInfo.FileExt = ext
 	storeInfo.FileName = filepath.Join(fileLimit.StorePrefix, fmt.Sprintf("%d%s", time.Now().UnixNano(), ext))
 	storeInfo.FilePath = filepath.Join(fileLimit.RootPath, storeInfo.FileName)
 	storeInfo.RemotePath = strings.Replace(storeInfo.FileName, "\\", "/", -1)
@@ -82,6 +83,7 @@ func (fileType FileType) GenerateStoreInfo(fileLimit *c.HttpServerStoreFileLimit
 
 type StoreServiceInterface interface {
 	SaveImageFile(file *multipart.FileHeader) (*StoreInfo, *ApiStatus)
+	DeleteImageFile(file string) (*StoreInfo, error)
 	SaveUploadImages(req *RequestUploadFile) *ApiResponse[ResponseUploadFile]
 }
 

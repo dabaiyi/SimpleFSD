@@ -3,24 +3,36 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	c "github.com/half-nothing/simple-fsd/internal/config"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/service"
 	"github.com/half-nothing/simple-fsd/internal/utils"
+	"strings"
 )
 
 type UserService struct {
-	emailService  EmailServiceInterface
-	config        *c.HttpServerConfig
-	userOperation operation.UserOperationInterface
+	emailService     EmailServiceInterface
+	config           *c.HttpServerConfig
+	userOperation    operation.UserOperationInterface
+	historyOperation operation.HistoryOperationInterface
+	storeService     StoreServiceInterface
 }
 
-func NewUserService(emailService EmailServiceInterface, config *c.HttpServerConfig, userOperation operation.UserOperationInterface) *UserService {
+func NewUserService(
+	emailService EmailServiceInterface,
+	config *c.HttpServerConfig,
+	userOperation operation.UserOperationInterface,
+	historyOperation operation.HistoryOperationInterface,
+	storeService StoreServiceInterface,
+) *UserService {
 	return &UserService{
-		emailService:  emailService,
-		config:        config,
-		userOperation: userOperation,
+		emailService:     emailService,
+		config:           config,
+		userOperation:    userOperation,
+		historyOperation: historyOperation,
+		storeService:     storeService,
 	}
 }
 
@@ -94,7 +106,7 @@ func (userService *UserService) UserLogin(req *RequestUserLogin) *ApiResponse[Re
 	if req.Username == "" || req.Password == "" {
 		return NewApiResponse[ResponseUserLogin](&ErrIllegalParam, Unsatisfied, nil)
 	}
-	userId := operation.StringUserId(req.Username)
+	userId := operation.GetUserId(req.Username)
 
 	user, res := CallDBFuncAndCheckError[operation.User, ResponseUserLogin](func() (*operation.User, error) {
 		return userId.GetUser(userService.userOperation)
@@ -163,7 +175,7 @@ func checkQQ(qq int) *ApiStatus {
 }
 
 func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfile, skipEmailVerify bool) (*ApiStatus, *operation.User) {
-	if req.Username == "" && req.Email == "" && req.QQ <= 0 && req.OriginPassword == "" && req.NewPassword == "" {
+	if req.Username == "" && req.Email == "" && req.QQ <= 0 && req.OriginPassword == "" && req.NewPassword == "" && req.AvatarUrl == "" {
 		return &ErrIllegalParam, nil
 	}
 	if req.OriginPassword != "" && req.NewPassword != "" {
@@ -223,9 +235,25 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 			updateInfo["email"] = req.Email
 		}
 	}
+
 	if req.QQ > 0 && req.QQ != user.QQ {
 		user.QQ = req.QQ
 		updateInfo["qq"] = req.QQ
+		if req.AvatarUrl == "" && user.AvatarUrl == "" {
+			user.AvatarUrl = fmt.Sprintf("https://q2.qlogo.cn/headimg_dl?dst_uin=%d&spec=100", user.QQ)
+			updateInfo["avatar_url"] = user.AvatarUrl
+		}
+	}
+
+	if req.AvatarUrl != "" {
+		if user.AvatarUrl != "" && !strings.HasPrefix(user.AvatarUrl, "https://q2.qlogo.cn/") {
+			_, err = userService.storeService.DeleteImageFile(user.AvatarUrl)
+			if err != nil {
+				c.ErrorF("err while delete user old avatar, %v", err)
+			}
+		}
+		user.AvatarUrl = req.AvatarUrl
+		updateInfo["avatar_url"] = user.AvatarUrl
 	}
 
 	if req.OriginPassword != "" {
@@ -411,4 +439,32 @@ func (userService *UserService) EditUserRating(req *RequestUserEditRating) *ApiR
 	}
 
 	return NewApiResponse(&SuccessEditUserRating, Unsatisfied, (*ResponseUserEditRating)(user))
+}
+
+var SuccessGetUserHistory = ApiStatus{StatusName: "GET_USER_HISTORY", Description: "成功获取用户历史数据", HttpCode: Ok}
+
+func (userService *UserService) GetUserHistory(req *RequestGetUserHistory) *ApiResponse[ResponseGetUserHistory] {
+	if req.Cid <= 0 {
+		return NewApiResponse[ResponseGetUserHistory](&ErrIllegalParam, Unsatisfied, nil)
+	}
+
+	user, res := CallDBFuncAndCheckError[operation.User, ResponseGetUserHistory](func() (*operation.User, error) {
+		return userService.userOperation.GetUserByCid(req.Cid)
+	})
+	if res != nil {
+		return res
+	}
+
+	userHistory, res := CallDBFuncAndCheckError[operation.UserHistory, ResponseGetUserHistory](func() (*operation.UserHistory, error) {
+		return userService.historyOperation.GetUserHistory(req.Cid)
+	})
+	if res != nil {
+		return res
+	}
+
+	return NewApiResponse(&SuccessGetUserHistory, Unsatisfied, &ResponseGetUserHistory{
+		TotalPilotTime: user.TotalPilotTime,
+		TotalAtcTime:   user.TotalAtcTime,
+		UserHistory:    userHistory,
+	})
 }

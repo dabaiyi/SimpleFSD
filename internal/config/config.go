@@ -330,6 +330,10 @@ func (config *EmailConfig) CheckValid() (bool, error) {
 		config.SendDuration = duration
 	}
 
+	if pass, err := config.Template.CheckValid(); !pass {
+		return false, err
+	}
+
 	config.EmailServer = gomail.NewDialer(config.Host, config.Port, config.Username, config.Password)
 
 	return true, nil
@@ -457,6 +461,7 @@ func defaultHttpServerStoreFileLimits() *HttpServerStoreFileLimits {
 			MaxFileSize:    5 * 1024 * 1024,
 			AllowedFileExt: []string{".jpg", ".png", ".bmp", ".jpeg"},
 			StorePrefix:    "images",
+			StoreInServer:  true,
 		},
 	}
 }
@@ -464,6 +469,16 @@ func defaultHttpServerStoreFileLimits() *HttpServerStoreFileLimits {
 func (config *HttpServerStoreFileLimits) CheckValid() (bool, error) {
 	if pass, err := config.ImageLimit.CheckValid(); !pass {
 		return false, err
+	}
+	return true, nil
+}
+
+func (config *HttpServerStoreFileLimits) CheckLocalStore(localStore bool) (bool, error) {
+	if !localStore {
+		return true, nil
+	}
+	if !config.ImageLimit.StoreInServer {
+		return false, fmt.Errorf("when you use local store, store_in_server must be true")
 	}
 	return true, nil
 }
@@ -522,9 +537,15 @@ func (config *HttpServerStore) CheckValid() (bool, error) {
 	}
 	switch config.StoreType {
 	case 0:
+		if pass, err := config.FileLimit.CheckLocalStore(true); !pass {
+			return false, err
+		}
 		// 本地存储
 		// 不用任何额外操作, 仅占位使用
 	case 1, 2:
+		if pass, err := config.FileLimit.CheckLocalStore(false); !pass {
+			return false, err
+		}
 		// 阿里云OSS存储或者腾讯云对象存储
 		if config.Region == "" {
 			return false, fmt.Errorf("invalid json field http_server.store.region, region cannot be empty")

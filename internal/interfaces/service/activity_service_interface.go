@@ -22,6 +22,7 @@ type ActivityModel struct {
 
 type ActivityServiceInterface interface {
 	GetActivities(req *RequestGetActivities) *ApiResponse[ResponseGetActivities]
+	GetActivitiesPage(req *RequestGetActivitiesPage) *ApiResponse[ResponseGetActivitiesPage]
 	GetActivityInfo(req *RequestActivityInfo) *ApiResponse[ResponseActivityInfo]
 	AddActivity(req *RequestAddActivity) *ApiResponse[ResponseAddActivity]
 	DeleteActivity(req *RequestDeleteActivity) *ApiResponse[ResponseDeleteActivity]
@@ -40,6 +41,19 @@ type RequestGetActivities struct {
 
 type ResponseGetActivities struct {
 	Items []*operation.Activity `json:"items"`
+}
+
+type RequestGetActivitiesPage struct {
+	JwtHeader
+	Page     int `query:"page_number"`
+	PageSize int `query:"page_size"`
+}
+
+type ResponseGetActivitiesPage struct {
+	Items    []*operation.Activity `json:"items"`
+	Page     int                   `json:"page"`
+	PageSize int                   `json:"page_size"`
+	Total    int64                 `json:"total"`
 }
 
 type RequestActivityInfo struct {

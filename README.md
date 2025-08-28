@@ -420,7 +420,7 @@ ii. 对于linux用户, 运行生成的fsd-server文件
 
 MIT License
 
-Copyright (c) 2025 Half_nothing
+Copyright © 2025 Half_nothing
 
 无附加条款。
 

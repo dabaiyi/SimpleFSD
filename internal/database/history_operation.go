@@ -39,3 +39,21 @@ func (historyOperation *HistoryOperation) EndRecordAndSaveHistory(history *Histo
 	history.OnlineTime = int(history.EndTime.Sub(history.StartTime).Seconds())
 	return historyOperation.SaveHistory(history)
 }
+
+func (historyOperation *HistoryOperation) GetUserHistory(cid int) (userHistory *UserHistory, err error) {
+	userHistory = &UserHistory{
+		Pilots:      make([]History, 0, 10),
+		Controllers: make([]History, 0, 10),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), historyOperation.queryTimeout)
+	defer cancel()
+	err = historyOperation.db.WithContext(ctx).Order("id desc").Where("cid = ? and is_atc = ?", cid, false).Limit(10).Find(&userHistory.Pilots).Error
+	if err != nil {
+		return
+	}
+	err = historyOperation.db.WithContext(ctx).Order("id desc").Where("cid = ? and is_atc = ?", cid, true).Limit(10).Find(&userHistory.Controllers).Error
+	if err != nil {
+		return
+	}
+	return
+}

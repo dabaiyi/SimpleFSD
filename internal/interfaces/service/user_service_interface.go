@@ -17,6 +17,7 @@ type UserServiceInterface interface {
 	GetUserList(req *RequestUserList) *ApiResponse[ResponseUserList]
 	EditUserPermission(req *RequestUserEditPermission) *ApiResponse[ResponseUserEditPermission]
 	EditUserRating(req *RequestUserEditRating) *ApiResponse[ResponseUserEditRating]
+	GetUserHistory(req *RequestGetUserHistory) *ApiResponse[ResponseGetUserHistory]
 }
 
 type RequestUserRegister struct {
@@ -64,6 +65,7 @@ type RequestUserEditCurrentProfile struct {
 	Username       string `json:"username"`
 	Email          string `json:"email"`
 	EmailCode      int    `json:"email_code"`
+	AvatarUrl      string `json:"avatar_url"`
 	QQ             int    `json:"qq"`
 	OriginPassword string `json:"origin_password"`
 	NewPassword    string `json:"new_password"`
@@ -113,3 +115,14 @@ type RequestUserEditRating struct {
 }
 
 type ResponseUserEditRating operation.User
+
+type RequestGetUserHistory struct {
+	JwtHeader
+	Cid int
+}
+
+type ResponseGetUserHistory struct {
+	*operation.UserHistory
+	TotalAtcTime   int `json:"total_atc_time"`
+	TotalPilotTime int `json:"total_pilot_time"`
+}

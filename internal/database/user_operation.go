@@ -34,7 +34,7 @@ func (userOperation *UserOperation) GetUserByUid(uid uint) (user *User, err erro
 	return
 }
 
-func (userOperation *UserOperation) GetUserByCid(cid uint) (user *User, err error) {
+func (userOperation *UserOperation) GetUserByCid(cid int) (user *User, err error) {
 	user = &User{}
 	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
@@ -105,6 +105,7 @@ func (userOperation *UserOperation) NewUser(username string, email string, cid i
 		Email:          email,
 		Cid:            cid,
 		Password:       string(encodePassword),
+		AvatarUrl:      "",
 		QQ:             0,
 		Rating:         0,
 		Permission:     0,
