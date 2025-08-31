@@ -10,6 +10,7 @@ import (
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/service"
 	"github.com/half-nothing/simple-fsd/internal/utils"
 	"strings"
+	"time"
 )
 
 type UserService struct {
@@ -331,9 +332,7 @@ func (userService *UserService) EditUserProfile(req *RequestUserEditProfile) *Ap
 	return NewApiResponse(&SuccessEditUserProfile, Unsatisfied, (*ResponseUserEditProfile)(user))
 }
 
-var (
-	SuccessGetUsers = ApiStatus{StatusName: "GET_USER_PAGE", Description: "获取用户信息分页成功", HttpCode: Ok}
-)
+var SuccessGetUsers = ApiStatus{StatusName: "GET_USER_PAGE", Description: "获取用户信息分页成功", HttpCode: Ok}
 
 func (userService *UserService) GetUserList(req *RequestUserList) *ApiResponse[ResponseUserList] {
 	if req.Page <= 0 || req.PageSize <= 0 {
@@ -351,6 +350,31 @@ func (userService *UserService) GetUserList(req *RequestUserList) *ApiResponse[R
 		return NewApiResponse[ResponseUserList](&ErrDatabaseFail, Unsatisfied, nil)
 	}
 	return NewApiResponse(&SuccessGetUsers, Unsatisfied, &ResponseUserList{
+		Items:    users,
+		Page:     req.Page,
+		PageSize: req.PageSize,
+		Total:    total,
+	})
+}
+
+var SuccessGetControllers = ApiStatus{StatusName: "GET_CONTROLLER_PAGE", Description: "获取管制员信息分页成功", HttpCode: Ok}
+
+func (userService *UserService) GetControllerList(req *RequestControllerList) *ApiResponse[ResponseControllerList] {
+	if req.Page <= 0 || req.PageSize <= 0 {
+		return NewApiResponse[ResponseControllerList](&ErrIllegalParam, Unsatisfied, nil)
+	}
+	if req.Permission <= 0 {
+		return NewApiResponse[ResponseControllerList](&ErrNoPermission, Unsatisfied, nil)
+	}
+	permission := operation.Permission(req.Permission)
+	if !permission.HasPermission(operation.UserShowList) {
+		return NewApiResponse[ResponseControllerList](&ErrNoPermission, Unsatisfied, nil)
+	}
+	users, total, err := userService.userOperation.GetControllers(req.Page, req.PageSize)
+	if err != nil {
+		return NewApiResponse[ResponseControllerList](&ErrDatabaseFail, Unsatisfied, nil)
+	}
+	return NewApiResponse(&SuccessGetControllers, Unsatisfied, &ResponseControllerList{
 		Items:    users,
 		Page:     req.Page,
 		PageSize: req.PageSize,
@@ -466,5 +490,35 @@ func (userService *UserService) GetUserHistory(req *RequestGetUserHistory) *ApiR
 		TotalPilotTime: user.TotalPilotTime,
 		TotalAtcTime:   user.TotalAtcTime,
 		UserHistory:    userHistory,
+	})
+}
+
+var SuccessGetToken = ApiStatus{StatusName: "GET_TOKEN", Description: "成功刷新秘钥", HttpCode: Ok}
+
+func (userService *UserService) GetTokenWithFlushToken(req *RequestGetToken) *ApiResponse[ResponseGetToken] {
+	if !req.FlushToken {
+		return NewApiResponse[ResponseGetToken](&ErrIllegalParam, Unsatisfied, nil)
+	}
+
+	user, res := CallDBFuncAndCheckError[operation.User, ResponseGetToken](func() (*operation.User, error) {
+		return userService.userOperation.GetUserByUid(req.Uid)
+	})
+
+	if res != nil {
+		return res
+	}
+
+	var flushToken string
+	if req.ExpiresAt.Add(-2 * userService.config.JWT.ExpiresDuration).After(time.Now()) {
+		flushToken = ""
+	} else {
+		flushToken = NewClaims(userService.config.JWT, user, true).GenerateKey()
+	}
+
+	token := NewClaims(userService.config.JWT, user, false)
+	return NewApiResponse(&SuccessGetToken, Unsatisfied, &ResponseGetToken{
+		User:       user,
+		Token:      token.GenerateKey(),
+		FlushToken: flushToken,
 	})
 }

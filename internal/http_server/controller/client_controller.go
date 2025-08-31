@@ -9,8 +9,8 @@ import (
 )
 
 type ClientControllerInterface interface {
-	GetServerWhazzup(ctx echo.Context) error
 	GetOnlineClients(ctx echo.Context) error
+	GetClientPath(ctx echo.Context) error
 	SendMessageToClient(ctx echo.Context) error
 	KillClient(ctx echo.Context) error
 }
@@ -25,6 +25,14 @@ func NewClientController(clientService ClientServiceInterface) *ClientController
 
 func (controller *ClientController) GetOnlineClients(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, controller.clientService.GetOnlineClient())
+}
+
+func (controller *ClientController) GetClientPath(ctx echo.Context) error {
+	data := &RequestClientPath{}
+	if err := ctx.Bind(data); err != nil {
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	return controller.clientService.GetClientPath(data).Response(ctx)
 }
 
 func (controller *ClientController) SendMessageToClient(ctx echo.Context) error {

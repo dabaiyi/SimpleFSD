@@ -10,6 +10,7 @@ type ClientServiceInterface interface {
 	GetOnlineClient() *OnlineClients
 	SendMessageToClient(req *RequestSendMessageToClient) *ApiResponse[ResponseSendMessageToClient]
 	KillClient(req *RequestKillClient) *ApiResponse[ResponseKillClient]
+	GetClientPath(req *RequestClientPath) *ApiResponse[ResponseClientPath]
 }
 
 type OnlineGeneral struct {
@@ -30,7 +31,6 @@ type OnlinePilot struct {
 	Heading     int                   `json:"heading"`
 	Altitude    int                   `json:"altitude"`
 	GroundSpeed int                   `json:"ground_speed"`
-	Paths       []*fsd.PilotPath      `json:"paths"`
 	FlightPlan  *operation.FlightPlan `json:"flight_plan"`
 	LogonTime   string                `json:"logon_time"`
 }
@@ -70,3 +70,9 @@ type RequestKillClient struct {
 }
 
 type ResponseKillClient bool
+
+type RequestClientPath struct {
+	Callsign string `query:"callsign"`
+}
+
+type ResponseClientPath []*fsd.PilotPath

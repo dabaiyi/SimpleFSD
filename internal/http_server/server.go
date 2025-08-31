@@ -151,7 +151,7 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	userService := impl.NewUserService(emailService, httpConfig, applicationContent.UserOperation(), applicationContent.HistoryOperation(), storeService)
 	clientManager := packet.NewClientManager(applicationContent)
 	clientService := impl.NewClientService(httpConfig, clientManager, emailService, applicationContent.UserOperation())
-	serverService := impl.NewServerService(config.Server)
+	serverService := impl.NewServerService(config.Server, applicationContent.UserOperation(), applicationContent.ActivityOperation())
 	activityService := impl.NewActivityService(httpConfig, applicationContent.UserOperation(), applicationContent.ActivityOperation(), storeService)
 
 	userController := controller.NewUserHandler(userService)
@@ -163,6 +163,7 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 
 	apiGroup := e.Group("/api")
 	apiGroup.POST("/sessions", userController.UserLoginHandler)
+	apiGroup.GET("/sessions", userController.GetToken, jwtMiddleware)
 	apiGroup.POST("/codes", emailController.SendVerifyEmail)
 	apiGroup.GET("/profile", userController.GetCurrentUserProfileHandler, jwtMiddleware)
 	apiGroup.PATCH("/profile", userController.EditCurrentProfileHandler, jwtMiddleware)
@@ -171,6 +172,7 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	userGroup := apiGroup.Group("/users")
 	userGroup.POST("", userController.UserRegisterHandler)
 	userGroup.GET("", userController.GetUsers, jwtMiddleware)
+	userGroup.GET("/controllers", userController.GetControllers, jwtMiddleware)
 	userGroup.GET("/availability", userController.CheckUserAvailabilityHandler)
 	userGroup.GET("/:uid/profile", userController.GetUserProfileHandler, jwtMiddleware)
 	userGroup.PATCH("/:uid/profile", userController.EditProfileHandler, jwtMiddleware)
@@ -180,11 +182,14 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	clientGroup := apiGroup.Group("/clients")
 	clientGroup.GET("/status", func(c echo.Context) error { return c.String(http.StatusOK, whazzupContent) })
 	clientGroup.GET("", clientController.GetOnlineClients)
+	clientGroup.GET("/paths", clientController.GetClientPath, jwtMiddleware)
 	clientGroup.POST("/:callsign/message", clientController.SendMessageToClient, jwtMiddleware)
 	clientGroup.DELETE("/:callsign", clientController.KillClient, jwtMiddleware)
 
 	serverGroup := apiGroup.Group("/server")
 	serverGroup.GET("/config", serverController.GetServerConfig)
+	serverGroup.GET("/info", serverController.GetServerInfo, jwtMiddleware)
+	serverGroup.GET("/rating", serverController.GetServerOnlineTime, jwtMiddleware)
 
 	activityGroup := apiGroup.Group("/activities")
 	activityGroup.GET("", activityController.GetActivities, jwtMiddleware)

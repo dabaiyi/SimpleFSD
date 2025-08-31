@@ -82,7 +82,6 @@ func (clientService *ClientService) getOnlineClient() *OnlineClients {
 				Heading:     client.Heading(),
 				Altitude:    client.Altitude(),
 				GroundSpeed: client.GroundSpeed(),
-				Paths:       client.Paths(),
 				FlightPlan:  client.FlightPlan(),
 				LogonTime:   client.History().StartTime.Format(time.DateTime),
 			}
@@ -150,4 +149,21 @@ func (clientService *ClientService) KillClient(req *RequestKillClient) *ApiRespo
 	}
 	data := ResponseKillClient(true)
 	return NewApiResponse[ResponseKillClient](&SuccessKillClient, Unsatisfied, &data)
+}
+
+var (
+	ErrClientNotFound    = ApiStatus{StatusName: "CLIENT_NOT_FOUND", Description: "指定客户端不存在", HttpCode: NotFound}
+	SuccessGetClientPath = ApiStatus{StatusName: "GET_CLIENT_PATH", Description: "获取指定客户端飞行路径", HttpCode: Ok}
+)
+
+func (clientService *ClientService) GetClientPath(req *RequestClientPath) *ApiResponse[ResponseClientPath] {
+	if req.Callsign == "" {
+		return NewApiResponse[ResponseClientPath](&ErrIllegalParam, Unsatisfied, nil)
+	}
+	client, exist := clientService.clientManager.GetClient(req.Callsign)
+	if !exist {
+		return NewApiResponse[ResponseClientPath](&ErrClientNotFound, Unsatisfied, nil)
+	}
+	data := ResponseClientPath(client.Paths())
+	return NewApiResponse(&SuccessGetClientPath, Unsatisfied, &data)
 }

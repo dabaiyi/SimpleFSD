@@ -15,9 +15,11 @@ type UserServiceInterface interface {
 	GetUserProfile(req *RequestUserProfile) *ApiResponse[ResponseUserProfile]
 	EditUserProfile(req *RequestUserEditProfile) *ApiResponse[ResponseUserEditProfile]
 	GetUserList(req *RequestUserList) *ApiResponse[ResponseUserList]
+	GetControllerList(req *RequestControllerList) *ApiResponse[ResponseControllerList]
 	EditUserPermission(req *RequestUserEditPermission) *ApiResponse[ResponseUserEditPermission]
 	EditUserRating(req *RequestUserEditRating) *ApiResponse[ResponseUserEditRating]
 	GetUserHistory(req *RequestGetUserHistory) *ApiResponse[ResponseGetUserHistory]
+	GetTokenWithFlushToken(req *RequestGetToken) *ApiResponse[ResponseGetToken]
 }
 
 type RequestUserRegister struct {
@@ -92,6 +94,19 @@ type ResponseUserList struct {
 	Total    int64             `json:"total"`
 }
 
+type RequestControllerList struct {
+	JwtHeader
+	Page     int `query:"page_number"`
+	PageSize int `query:"page_size"`
+}
+
+type ResponseControllerList struct {
+	Items    []*operation.User `json:"items"`
+	Page     int               `json:"page"`
+	PageSize int               `json:"page_size"`
+	Total    int64             `json:"total"`
+}
+
 type RequestUserEditProfile struct {
 	JwtHeader
 	TargetUid uint `param:"uid"`
@@ -125,4 +140,14 @@ type ResponseGetUserHistory struct {
 	*operation.UserHistory
 	TotalAtcTime   int `json:"total_atc_time"`
 	TotalPilotTime int `json:"total_pilot_time"`
+}
+
+type RequestGetToken struct {
+	*Claims
+}
+
+type ResponseGetToken struct {
+	User       *operation.User `json:"user"`
+	Token      string          `json:"token"`
+	FlushToken string          `json:"flush_token"`
 }

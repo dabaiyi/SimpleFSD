@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	c "github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -91,7 +92,16 @@ func (userOperation *UserOperation) GetUsers(page, pageSize int) (users []*User,
 	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
 	defer cancel()
 	userOperation.db.WithContext(ctx).Model(&User{}).Select("id").Count(&total)
-	err = userOperation.db.WithContext(ctx).Offset((page - 1) * pageSize).Limit(pageSize).Find(&users).Error
+	err = userOperation.db.WithContext(ctx).Offset((page - 1) * pageSize).Order("cid").Limit(pageSize).Find(&users).Error
+	return
+}
+
+func (userOperation *UserOperation) GetControllers(page, pageSize int) (users []*User, total int64, err error) {
+	users = make([]*User, 0, pageSize)
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
+	defer cancel()
+	userOperation.db.WithContext(ctx).Model(&User{}).Select("id").Where("rating > ?", fsd.Normal).Count(&total)
+	err = userOperation.db.WithContext(ctx).Offset((page-1)*pageSize).Order("cid").Where("rating > ?", fsd.Normal).Limit(pageSize).Find(&users).Error
 	return
 }
 
@@ -211,4 +221,31 @@ func (userOperation *UserOperation) IsUserIdentifierTaken(tx *gorm.DB, cid int, 
 	}
 
 	return count > 0, nil
+}
+
+func (userOperation *UserOperation) GetTotalUsers() (total int64, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
+	defer cancel()
+	err = userOperation.db.WithContext(ctx).Model(&User{}).Select("id").Count(&total).Error
+	return
+}
+
+func (userOperation *UserOperation) GetTotalControllers() (total int64, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
+	defer cancel()
+	err = userOperation.db.WithContext(ctx).Model(&User{}).Select("id").Where("rating > ?", fsd.Normal).Count(&total).Error
+	return
+}
+
+func (userOperation *UserOperation) GetTimeRatings() (pilots []*User, controllers []*User, err error) {
+	pilots = make([]*User, 0, 10)
+	controllers = make([]*User, 0, 10)
+	ctx, cancel := context.WithTimeout(context.Background(), userOperation.queryTimeout)
+	defer cancel()
+	err = userOperation.db.WithContext(ctx).Select("id", "cid", "total_pilot_time").Where("total_pilot_time > 0").Order("total_pilot_time desc").Limit(10).Find(&pilots).Error
+	if err != nil {
+		return
+	}
+	err = userOperation.db.WithContext(ctx).Select("id", "cid", "total_atc_time").Where("total_atc_time > 0").Order("total_atc_time desc").Limit(10).Find(&controllers).Error
+	return
 }

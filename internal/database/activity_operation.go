@@ -51,9 +51,9 @@ func (activityOperation *ActivityOperation) NewActivityAtc(facility *ActivityFac
 	}
 }
 
-func (activityOperation *ActivityOperation) NewActivityPilot(activity *Activity, cid int, callsign string, aircraftType string) (activityPilot *ActivityPilot) {
+func (activityOperation *ActivityOperation) NewActivityPilot(activityId uint, cid int, callsign string, aircraftType string) (activityPilot *ActivityPilot) {
 	return &ActivityPilot{
-		ActivityId:   activity.ID,
+		ActivityId:   activityId,
 		Cid:          cid,
 		Callsign:     callsign,
 		AircraftType: aircraftType,
@@ -95,17 +95,6 @@ func (activityOperation *ActivityOperation) GetActivityById(id uint) (activity *
 	return
 }
 
-func (activityOperation *ActivityOperation) GetOnlyActivityById(id uint) (activity *Activity, err error) {
-	activity = &Activity{}
-	ctx, cancel := context.WithTimeout(context.Background(), activityOperation.queryTimeout)
-	defer cancel()
-	err = activityOperation.db.WithContext(ctx).Where("id = ?", id).First(activity).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = ErrActivityNotFound
-	}
-	return
-}
-
 func (activityOperation *ActivityOperation) SaveActivity(activity *Activity) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), activityOperation.queryTimeout)
 	defer cancel()
@@ -126,10 +115,10 @@ func (activityOperation *ActivityOperation) DeleteActivity(activity *Activity) (
 	})
 }
 
-func (activityOperation *ActivityOperation) SetActivityStatus(activity *Activity, status ActivityStatus) (err error) {
+func (activityOperation *ActivityOperation) SetActivityStatus(activityId uint, status ActivityStatus) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), activityOperation.queryTimeout)
 	defer cancel()
-	return activityOperation.db.WithContext(ctx).Model(activity).Update("status", int(status)).Error
+	return activityOperation.db.WithContext(ctx).Model(&Activity{ID: activityId}).Update("status", int(status)).Error
 }
 
 func (activityOperation *ActivityOperation) SetActivityPilotStatus(activityPilot *ActivityPilot, status ActivityPilotStatus) (err error) {
@@ -203,19 +192,19 @@ func (activityOperation *ActivityOperation) UnsignFacilityController(facility *A
 	})
 }
 
-func (activityOperation *ActivityOperation) SignActivityPilot(activity *Activity, cid int, callsign string, aircraftType string) (err error) {
+func (activityOperation *ActivityOperation) SignActivityPilot(activityId uint, cid int, callsign string, aircraftType string) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), activityOperation.queryTimeout)
 	defer cancel()
 	return activityOperation.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		pilot := &ActivityPilot{}
-		tx.Select("id", "cid", "callsign").Where("activity_id = ? and (cid = ? or callsign = ?)", activity.ID, cid, callsign).First(pilot)
+		tx.Select("id", "cid", "callsign").Where("activity_id = ? and (cid = ? or callsign = ?)", activityId, cid, callsign).First(pilot)
 		if pilot.ID != 0 {
 			if pilot.Cid == cid {
 				return ErrActivityAlreadySigned
 			}
 			return ErrCallsignAlreadyUsed
 		}
-		activityPilot := activityOperation.NewActivityPilot(activity, cid, callsign, aircraftType)
+		activityPilot := activityOperation.NewActivityPilot(activityId, cid, callsign, aircraftType)
 		err := tx.Create(activityPilot).Error
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			return ErrActivityAlreadySigned
@@ -224,12 +213,12 @@ func (activityOperation *ActivityOperation) SignActivityPilot(activity *Activity
 	})
 }
 
-func (activityOperation *ActivityOperation) UnsignActivityPilot(activity *Activity, cid int) (err error) {
+func (activityOperation *ActivityOperation) UnsignActivityPilot(activityId uint, cid int) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), activityOperation.queryTimeout)
 	defer cancel()
 	return activityOperation.db.Clauses(clause.Locking{Strength: "UPDATE"}).WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		pilot := &ActivityPilot{}
-		tx.Select("id").Where("activity_id = ? and cid = ?", activity.ID, cid).First(pilot)
+		tx.Select("id").Where("activity_id = ? and cid = ?", activityId, cid).First(pilot)
 		if pilot.ID == 0 {
 			return ErrActivityUnsigned
 		}
@@ -237,10 +226,80 @@ func (activityOperation *ActivityOperation) UnsignActivityPilot(activity *Activi
 	})
 }
 
-func (activityOperation *ActivityOperation) UpdateActivityInfo(activity *Activity, updateInfo map[string]interface{}) (err error) {
+func (activityOperation *ActivityOperation) UpdateActivityInfo(oldActivity *Activity, newActivity *Activity, updateInfo map[string]interface{}) (err error) {
+	oldFacilities := oldActivity.Facilities
+	newFacilities := newActivity.Facilities
+
+	deleteFacilities := make([]*ActivityFacility, 0)
+	insertFacilities := make([]*ActivityFacility, 0)
+	updateFacilities := make(map[uint]map[string]interface{})
+
+	// 创建旧席位的映射，便于快速查找
+	oldFacilityMap := make(map[uint]*ActivityFacility)
+	for _, facility := range oldFacilities {
+		oldFacilityMap[facility.ID] = facility
+	}
+
+	// 处理新席位
+	for _, newFacility := range newFacilities {
+		if newFacility.ID == 0 {
+			// 新增席位
+			newFacility.ActivityId = newActivity.ID
+			insertFacilities = append(insertFacilities, newFacility)
+		} else if oldFacility, exists := oldFacilityMap[newFacility.ID]; exists {
+			// 检查是否需要更新
+			if !newFacility.Equal(oldFacility) {
+				updateFacilities[newFacility.ID] = newFacility.Diff(oldFacility)
+			}
+			// 从映射中移除
+			delete(oldFacilityMap, newFacility.ID)
+		} else {
+			// 注意：如果newFacility.ID不为0但在oldFacilityMap中不存在
+			// 这可能表示数据不一致，可能是脏读导致的数据错误，也可能是有人恶意注入，直接报错退出就行
+			return ErrInconsistentData
+		}
+	}
+
+	// 剩余在oldFacilityMap中的席位是需要删除的
+	for _, facility := range oldFacilityMap {
+		deleteFacilities = append(deleteFacilities, facility)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), activityOperation.queryTimeout)
 	defer cancel()
 	return activityOperation.db.Clauses(clause.Locking{Strength: "UPDATE"}).WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return tx.Model(activity).Updates(updateInfo).Error
+		// 更新活动基础信息
+		if err := tx.Model(oldActivity).Updates(updateInfo).Error; err != nil {
+			return err
+		}
+
+		// 外键已配置级联删除, 这里直接批量删除即可
+		if len(deleteFacilities) > 0 {
+			if err := tx.Delete(deleteFacilities).Error; err != nil {
+				return err
+			}
+		}
+
+		if len(insertFacilities) > 0 {
+			if err := tx.Create(insertFacilities).Error; err != nil {
+				return err
+			}
+		}
+
+		if len(updateFacilities) > 0 {
+			for id, updateData := range updateFacilities {
+				if err := tx.Model(&ActivityFacility{ID: id}).Updates(updateData).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	})
+}
+
+func (activityOperation *ActivityOperation) GetTotalActivities() (total int64, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), activityOperation.queryTimeout)
+	defer cancel()
+	err = activityOperation.db.WithContext(ctx).Model(&Activity{}).Select("id").Count(&total).Error
+	return
 }

@@ -3,7 +3,6 @@ package service
 
 import (
 	"github.com/half-nothing/simple-fsd/internal/interfaces/operation"
-	"time"
 )
 
 type ActivityModel struct {
@@ -117,15 +116,7 @@ type ResponsePilotLeave bool
 
 type RequestEditActivity struct {
 	JwtHeader
-	ActivityId       uint       `param:"id"`
-	Title            *string    `json:"title"`
-	ImageUrl         *string    `json:"image_url"`
-	ActiveTime       *time.Time `json:"active_time"`
-	DepartureAirport *string    `json:"departure_airport"`
-	ArrivalAirport   *string    `json:"arrival_airport"`
-	Route            *string    `json:"route"`
-	Distance         *int       `json:"distance"`
-	NOTAMS           *string    `json:"NOTAMS"`
+	*operation.Activity
 }
 
 type ResponseEditActivity bool

@@ -7,6 +7,8 @@ import (
 
 type ServerServiceInterface interface {
 	GetServerConfig() *ApiResponse[ResponseGetServerConfig]
+	GetServerInfo() *ApiResponse[ResponseGetServerInfo]
+	GetTimeRating() *ApiResponse[ResponseGetTimeRating]
 }
 
 type ServerLimits struct {
@@ -21,12 +23,24 @@ type ServerLimits struct {
 	SimulatorServer   bool `json:"simulator_server"`
 }
 
-type ServerConfig struct {
+type ResponseGetServerConfig struct {
 	Limits     *ServerLimits    `json:"limits"`
 	Facilities *[]FacilityModel `json:"facilities"`
 	Ratings    *[]RatingModel   `json:"ratings"`
 }
 
-type ResponseGetServerConfig struct {
-	*ServerConfig
+type ResponseGetServerInfo struct {
+	TotalUser       int64 `json:"total_user"`
+	TotalController int64 `json:"total_controller"`
+	TotalActivity   int64 `json:"total_activity"`
+}
+
+type OnlineTime struct {
+	Cid  int `json:"cid"`
+	Time int `json:"time"`
+}
+
+type ResponseGetTimeRating struct {
+	Pilots      []OnlineTime `json:"pilots"`
+	Controllers []OnlineTime `json:"controllers"`
 }

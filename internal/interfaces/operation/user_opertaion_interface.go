@@ -79,4 +79,8 @@ type UserOperationInterface interface {
 	VerifyUserPassword(user *User, password string) (pass bool)
 	// IsUserIdentifierTaken 检查给定用户三元组的一致性约束, err为nil且taken为true时表示一致性约束检查通过
 	IsUserIdentifierTaken(tx *gorm.DB, cid int, username, email string) (taken bool, err error)
+	GetTotalUsers() (total int64, err error)
+	GetTotalControllers() (total int64, err error)
+	GetControllers(page, pageSize int) (users []*User, total int64, err error)
+	GetTimeRatings() (pilots []*User, controllers []*User, err error)
 }

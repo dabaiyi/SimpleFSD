@@ -82,15 +82,77 @@ type Activity struct {
 	DeletedAt        gorm.DeletedAt      `json:"-"`
 }
 
+func (facility *Activity) Equal(other *Activity) bool {
+	return facility.ID == other.ID && facility.Publisher == other.Publisher && facility.Title == other.Title &&
+		facility.ImageUrl == other.ImageUrl && facility.ActiveTime == other.ActiveTime &&
+		facility.DepartureAirport == other.DepartureAirport && facility.ArrivalAirport == other.ArrivalAirport &&
+		facility.Route == other.Route && facility.Distance == other.Distance && facility.Status == other.Status &&
+		facility.NOTAMS == other.NOTAMS
+}
+
+func (facility *Activity) Diff(other *Activity) map[string]interface{} {
+	result := make(map[string]interface{})
+	if facility.Publisher != 0 && facility.Publisher != other.Publisher {
+		result["publisher"] = facility.Publisher
+	}
+	if facility.Title != "" && facility.Title != other.Title {
+		result["title"] = facility.Title
+	}
+	if facility.ImageUrl != "" && facility.ImageUrl != other.ImageUrl {
+		result["image_url"] = facility.ImageUrl
+	}
+	if facility.ActiveTime != other.ActiveTime {
+		result["active_time"] = facility.ActiveTime
+	}
+	if facility.DepartureAirport != "" && facility.DepartureAirport != other.DepartureAirport {
+		result["departure_airport"] = facility.DepartureAirport
+	}
+	if facility.ArrivalAirport != "" && facility.ArrivalAirport != other.ArrivalAirport {
+		result["arrival_airport"] = facility.ArrivalAirport
+	}
+	if facility.Route != "" && facility.Route != other.Route {
+		result["route"] = facility.Route
+	}
+	if facility.Distance != 0 && facility.Distance != other.Distance {
+		result["distance"] = facility.Distance
+	}
+	if facility.Status != other.Status {
+		result["status"] = facility.Status
+	}
+	if facility.NOTAMS != other.NOTAMS {
+		result["NOTAMS"] = facility.NOTAMS
+	}
+	return result
+}
+
 type ActivityFacility struct {
 	ID         uint         `gorm:"primarykey" json:"id"`
 	ActivityId uint         `gorm:"index;not null" json:"activity_id"`
 	MinRating  int          `gorm:"default:2;not null" json:"min_rating"`
 	Callsign   string       `gorm:"size:16;not null" json:"callsign"`
 	Frequency  string       `gorm:"size:8;not null" json:"frequency"`
-	Controller *ActivityATC `gorm:"foreignKey:FacilityId;references:ID" json:"-"`
+	Controller *ActivityATC `gorm:"foreignKey:FacilityId;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
 	CreatedAt  time.Time    `json:"-"`
 	UpdatedAt  time.Time    `json:"-"`
+}
+
+func (facility *ActivityFacility) Equal(other *ActivityFacility) bool {
+	return facility.ID == other.ID && facility.ActivityId == other.ActivityId && facility.MinRating == other.MinRating &&
+		facility.Callsign == other.Callsign && facility.Frequency == other.Frequency
+}
+
+func (facility *ActivityFacility) Diff(other *ActivityFacility) map[string]interface{} {
+	result := make(map[string]interface{})
+	if facility.MinRating != other.MinRating {
+		result["min_rating"] = facility.MinRating
+	}
+	if facility.Callsign != other.Callsign {
+		result["callsign"] = facility.Callsign
+	}
+	if facility.Frequency != other.Frequency {
+		result["frequency"] = facility.Frequency
+	}
+	return result
 }
 
 type ActivityATC struct {

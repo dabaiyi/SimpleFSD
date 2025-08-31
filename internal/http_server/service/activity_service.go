@@ -199,13 +199,7 @@ var (
 )
 
 func (activityService *ActivityService) PilotJoin(req *RequestPilotJoin) *ApiResponse[ResponsePilotJoin] {
-	activity, res := CallDBFuncAndCheckError[operation.Activity, ResponsePilotJoin](func() (*operation.Activity, error) {
-		return activityService.activityOperation.GetOnlyActivityById(req.ActivityId)
-	})
-	if res != nil {
-		return res
-	}
-	err := activityService.activityOperation.SignActivityPilot(activity, req.Cid, req.Callsign, req.AircraftType)
+	err := activityService.activityOperation.SignActivityPilot(req.ActivityId, req.Cid, req.Callsign, req.AircraftType)
 	if err != nil {
 		if errors.Is(err, operation.ErrActivityAlreadySigned) {
 			return NewApiResponse[ResponsePilotJoin](&ErrAlreadySigned, Unsatisfied, nil)
@@ -225,13 +219,7 @@ var (
 )
 
 func (activityService *ActivityService) PilotLeave(req *RequestPilotLeave) *ApiResponse[ResponsePilotLeave] {
-	activity, res := CallDBFuncAndCheckError[operation.Activity, ResponsePilotLeave](func() (*operation.Activity, error) {
-		return activityService.activityOperation.GetOnlyActivityById(req.ActivityId)
-	})
-	if res != nil {
-		return res
-	}
-	err := activityService.activityOperation.UnsignActivityPilot(activity, req.Cid)
+	err := activityService.activityOperation.UnsignActivityPilot(req.ActivityId, req.Cid)
 	if err != nil {
 		if errors.Is(err, operation.ErrActivityUnsigned) {
 			return NewApiResponse[ResponsePilotLeave](&ErrNoSigned, Unsatisfied, nil)
@@ -242,60 +230,33 @@ func (activityService *ActivityService) PilotLeave(req *RequestPilotLeave) *ApiR
 	return NewApiResponse(&SuccessUnsignedActivity, Unsatisfied, &data)
 }
 
-var (
-	SuccessEditActivity = ApiStatus{StatusName: "EDIT_ACTIVITY", Description: "修改活动成功", HttpCode: Ok}
-)
+var SuccessEditActivity = ApiStatus{StatusName: "EDIT_ACTIVITY", Description: "修改活动成功", HttpCode: Ok}
 
 func (activityService *ActivityService) EditActivity(req *RequestEditActivity) *ApiResponse[ResponseEditActivity] {
-	if req.Title == nil && req.ImageUrl == nil && req.ActiveTime == nil && req.DepartureAirport == nil &&
-		req.ArrivalAirport == nil && req.Route == nil && req.Distance == nil && req.NOTAMS == nil {
+	if req.Activity == nil {
 		return NewApiResponse[ResponseEditActivity](&ErrIllegalParam, Unsatisfied, nil)
 	}
 	if req.Permission <= 0 {
 		return NewApiResponse[ResponseEditActivity](&ErrNoPermission, Unsatisfied, nil)
 	}
 	permission := operation.Permission(req.Permission)
-	if !permission.HasPermission(operation.ActivityEditContent) {
+	if !permission.HasPermission(operation.ActivityEdit) {
 		return NewApiResponse[ResponseEditActivity](&ErrNoPermission, Unsatisfied, nil)
 	}
 	activity, res := CallDBFuncAndCheckError[operation.Activity, ResponseEditActivity](func() (*operation.Activity, error) {
-		return activityService.activityOperation.GetOnlyActivityById(req.ActivityId)
+		return activityService.activityOperation.GetActivityById(req.ID)
 	})
 	if res != nil {
 		return res
 	}
-	updateInfo := map[string]interface{}{}
-	if req.Title != nil {
-		updateInfo["title"] = req.Title
-	}
-	if req.ImageUrl != nil && *req.ImageUrl != activity.ImageUrl {
-		if activity.ImageUrl != "" {
-			_, err := activityService.storeService.DeleteImageFile(activity.ImageUrl)
-			if err != nil {
-				c.ErrorF("err while delete old activity image, %v", err)
-			}
+	updateInfo := req.Activity.Diff(activity)
+	if req.ImageUrl != "" && req.ImageUrl != activity.ImageUrl && activity.ImageUrl != "" {
+		_, err := activityService.storeService.DeleteImageFile(activity.ImageUrl)
+		if err != nil {
+			c.ErrorF("err while delete old activity image, %v", err)
 		}
-		updateInfo["image_url"] = req.ImageUrl
 	}
-	if req.ActiveTime != nil {
-		updateInfo["active_time"] = req.ActiveTime
-	}
-	if req.DepartureAirport != nil {
-		updateInfo["departure_airport"] = req.DepartureAirport
-	}
-	if req.ArrivalAirport != nil {
-		updateInfo["arrival_airport"] = req.ArrivalAirport
-	}
-	if req.Route != nil {
-		updateInfo["route"] = req.Route
-	}
-	if req.Distance != nil {
-		updateInfo["distance"] = req.Distance
-	}
-	if req.NOTAMS != nil {
-		updateInfo["notams"] = req.NOTAMS
-	}
-	err := activityService.activityOperation.UpdateActivityInfo(activity, updateInfo)
+	err := activityService.activityOperation.UpdateActivityInfo(activity, req.Activity, updateInfo)
 	if err != nil {
 		return NewApiResponse[ResponseEditActivity](&ErrDatabaseFail, Unsatisfied, nil)
 	}
@@ -319,13 +280,7 @@ func (activityService *ActivityService) EditActivityStatus(req *RequestEditActiv
 	if !permission.HasPermission(operation.ActivityEditState) {
 		return NewApiResponse[ResponseEditActivityStatus](&ErrNoPermission, Unsatisfied, nil)
 	}
-	activity, res := CallDBFuncAndCheckError[operation.Activity, ResponseEditActivityStatus](func() (*operation.Activity, error) {
-		return activityService.activityOperation.GetOnlyActivityById(req.ActivityId)
-	})
-	if res != nil {
-		return res
-	}
-	err := activityService.activityOperation.SetActivityStatus(activity, status)
+	err := activityService.activityOperation.SetActivityStatus(req.ActivityId, status)
 	if err != nil {
 		return NewApiResponse[ResponseEditActivityStatus](&ErrDatabaseFail, Unsatisfied, nil)
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-type UserHandlerInterface interface {
+type UserControllerInterface interface {
 	UserRegisterHandler(ctx echo.Context) error
 	UserLoginHandler(ctx echo.Context) error
 	CheckUserAvailabilityHandler(ctx echo.Context) error
@@ -17,9 +17,11 @@ type UserHandlerInterface interface {
 	GetUserProfileHandler(ctx echo.Context) error
 	EditProfileHandler(ctx echo.Context) error
 	GetUsers(ctx echo.Context) error
+	GetControllers(ctx echo.Context) error
 	EditUserPermission(ctx echo.Context) error
 	EditUserRating(ctx echo.Context) error
 	GetUserHistory(ctx echo.Context) error
+	GetToken(ctx echo.Context) error
 }
 
 type UserController struct {
@@ -117,6 +119,19 @@ func (controller *UserController) GetUsers(ctx echo.Context) error {
 	return controller.service.GetUserList(data).Response(ctx)
 }
 
+func (controller *UserController) GetControllers(ctx echo.Context) error {
+	data := &RequestControllerList{}
+	if err := ctx.Bind(data); err != nil {
+		c.ErrorF("error binding data: %v", err)
+		return NewErrorResponse(ctx, &ErrLackParam)
+	}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Uid = claim.Uid
+	data.Permission = claim.Permission
+	return controller.service.GetControllerList(data).Response(ctx)
+}
+
 func (controller *UserController) EditUserPermission(ctx echo.Context) error {
 	data := &RequestUserEditPermission{}
 	if err := ctx.Bind(data); err != nil {
@@ -151,4 +166,12 @@ func (controller *UserController) GetUserHistory(ctx echo.Context) error {
 	data.Permission = claim.Permission
 	data.Cid = claim.Cid
 	return controller.service.GetUserHistory(data).Response(ctx)
+}
+
+func (controller *UserController) GetToken(ctx echo.Context) error {
+	data := &RequestGetToken{}
+	token := ctx.Get("user").(*jwt.Token)
+	claim := token.Claims.(*Claims)
+	data.Claims = claim
+	return controller.service.GetTokenWithFlushToken(data).Response(ctx)
 }
