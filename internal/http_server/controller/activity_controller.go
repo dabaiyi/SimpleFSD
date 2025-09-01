@@ -73,6 +73,8 @@ func (controller ActivityController) AddActivity(ctx echo.Context) error {
 	data.Uid = claim.Uid
 	data.Cid = claim.Cid
 	data.Permission = claim.Permission
+	data.Ip = ctx.RealIP()
+	data.UserAgent = ctx.Request().UserAgent()
 	return controller.activityService.AddActivity(data).Response(ctx)
 }
 
@@ -86,6 +88,9 @@ func (controller ActivityController) DeleteActivity(ctx echo.Context) error {
 	claim := token.Claims.(*Claims)
 	data.Uid = claim.Uid
 	data.Permission = claim.Permission
+	data.Cid = claim.Cid
+	data.Ip = ctx.RealIP()
+	data.UserAgent = ctx.Request().UserAgent()
 	return controller.activityService.DeleteActivity(data).Response(ctx)
 }
 
@@ -155,6 +160,9 @@ func (controller ActivityController) EditActivity(ctx echo.Context) error {
 	claim := token.Claims.(*Claims)
 	data.Uid = claim.Uid
 	data.Permission = claim.Permission
+	data.Cid = claim.Cid
+	data.Ip = ctx.RealIP()
+	data.UserAgent = ctx.Request().UserAgent()
 	return controller.activityService.EditActivity(data).Response(ctx)
 }
 

@@ -191,6 +191,7 @@ func (config *JWTConfig) CheckValid() (bool, error) {
 type SSLConfig struct {
 	Enable          bool   `json:"enable"`
 	EnableHSTS      bool   `json:"enable_hsts"`
+	ForceSSL        bool   `json:"force_ssl"`
 	HstsExpiredTime int    `json:"hsts_expired_time"`
 	IncludeDomain   bool   `json:"include_domain"`
 	CertFile        string `json:"cert_file"`
@@ -201,6 +202,7 @@ func defaultSSLConfig() *SSLConfig {
 	return &SSLConfig{
 		Enable:          false,
 		EnableHSTS:      false,
+		ForceSSL:        false,
 		HstsExpiredTime: 5184000,
 		IncludeDomain:   false,
 		CertFile:        "",
@@ -220,6 +222,11 @@ func (config *SSLConfig) CheckValid() (bool, error) {
 		config.EnableHSTS = false
 		config.HstsExpiredTime = 0
 		config.IncludeDomain = false
+	}
+	if !config.Enable && config.ForceSSL {
+		Warn("You can not force ssl when ssl is not enable!")
+		config.EnableHSTS = false
+		config.ForceSSL = false
 	}
 	return true, nil
 }

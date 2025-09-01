@@ -51,6 +51,11 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+type EchoContentHeader struct {
+	Ip        string
+	UserAgent string
+}
+
 type JwtHeader struct {
 	Uid        uint
 	Permission int64

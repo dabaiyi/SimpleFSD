@@ -187,7 +187,7 @@ func (cm *ClientManager) SendRawMessageTo(from int, to string, message string) e
 		return ErrCallsignNotFound
 	}
 
-	bytes := makePacket(Message, fmt.Sprintf("%04d", from), to, message)
+	bytes := makePacket(Message, fmt.Sprintf("(%04d)", from), to, message)
 
 	client.SendLine(bytes)
 	return nil

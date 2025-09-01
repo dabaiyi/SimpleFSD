@@ -45,6 +45,8 @@ func (controller *ClientController) SendMessageToClient(ctx echo.Context) error 
 	data.Uid = claim.Uid
 	data.Cid = claim.Cid
 	data.Permission = claim.Permission
+	data.Ip = ctx.RealIP()
+	data.UserAgent = ctx.Request().UserAgent()
 	return controller.clientService.SendMessageToClient(data).Response(ctx)
 }
 
@@ -57,5 +59,8 @@ func (controller *ClientController) KillClient(ctx echo.Context) error {
 	claim := token.Claims.(*Claims)
 	data.Uid = claim.Uid
 	data.Permission = claim.Permission
+	data.Cid = claim.Cid
+	data.Ip = ctx.RealIP()
+	data.UserAgent = ctx.Request().UserAgent()
 	return controller.clientService.KillClient(data).Response(ctx)
 }

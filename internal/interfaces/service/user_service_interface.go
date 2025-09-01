@@ -109,6 +109,8 @@ type ResponseControllerList struct {
 
 type RequestUserEditProfile struct {
 	JwtHeader
+	EchoContentHeader
+	Cid       int
 	TargetUid uint `param:"uid"`
 	RequestUserEditCurrentProfile
 }
@@ -117,6 +119,8 @@ type ResponseUserEditProfile operation.User
 
 type RequestUserEditPermission struct {
 	JwtHeader
+	EchoContentHeader
+	Cid         int
 	TargetUid   uint     `param:"uid"`
 	Permissions echo.Map `json:"permissions"`
 }
@@ -125,6 +129,8 @@ type ResponseUserEditPermission operation.User
 
 type RequestUserEditRating struct {
 	JwtHeader
+	EchoContentHeader
+	Cid       int
 	TargetUid uint `param:"uid"`
 	Rating    int  `json:"rating"`
 }

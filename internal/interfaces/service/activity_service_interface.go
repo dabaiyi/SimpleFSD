@@ -63,6 +63,7 @@ type ResponseActivityInfo operation.Activity
 
 type RequestAddActivity struct {
 	JwtHeader
+	EchoContentHeader
 	Cid int
 	*operation.Activity
 }
@@ -73,6 +74,8 @@ type ResponseAddActivity struct {
 
 type RequestDeleteActivity struct {
 	JwtHeader
+	EchoContentHeader
+	Cid        int
 	ActivityId uint `param:"id"`
 }
 
@@ -116,6 +119,8 @@ type ResponsePilotLeave bool
 
 type RequestEditActivity struct {
 	JwtHeader
+	EchoContentHeader
+	Cid int
 	*operation.Activity
 }
 

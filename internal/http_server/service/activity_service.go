@@ -2,11 +2,13 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	c "github.com/half-nothing/simple-fsd/internal/config"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/service"
+	"strconv"
 	"time"
 )
 
@@ -15,6 +17,7 @@ type ActivityService struct {
 	userOperation     operation.UserOperationInterface
 	activityOperation operation.ActivityOperationInterface
 	storeService      StoreServiceInterface
+	auditLogOperation operation.AuditLogOperationInterface
 }
 
 func NewActivityService(
@@ -22,12 +25,14 @@ func NewActivityService(
 	userOperation operation.UserOperationInterface,
 	activityOperation operation.ActivityOperationInterface,
 	storeService StoreServiceInterface,
+	auditLogOperation operation.AuditLogOperationInterface,
 ) *ActivityService {
 	return &ActivityService{
 		config:            config,
 		userOperation:     userOperation,
 		activityOperation: activityOperation,
 		storeService:      storeService,
+		auditLogOperation: auditLogOperation,
 	}
 }
 
@@ -100,6 +105,21 @@ func (activityService *ActivityService) AddActivity(req *RequestAddActivity) *Ap
 		c.ErrorF("Error adding activity: %v", err)
 		return NewApiResponse[ResponseAddActivity](&ErrDatabaseFail, Unsatisfied, nil)
 	}
+
+	go func() {
+		newValue, _ := json.Marshal(req.Activity)
+		changeDetail := &operation.ChangeDetail{
+			OldValue: "",
+			NewValue: string(newValue),
+		}
+		auditLog := activityService.auditLogOperation.NewAuditLog(operation.ActivityCreated, req.Cid,
+			strconv.Itoa(int(req.Activity.ID)), req.Ip, req.UserAgent, changeDetail)
+		err := activityService.auditLogOperation.SaveAuditLog(auditLog)
+		if err != nil {
+			c.ErrorF("Fail to create audit log for activity_created, detail: %v", err)
+		}
+	}()
+
 	return NewApiResponse[ResponseAddActivity](&SuccessAddActivity, Unsatisfied, &ResponseAddActivity{Activity: req.Activity})
 }
 
@@ -125,6 +145,16 @@ func (activityService *ActivityService) DeleteActivity(req *RequestDeleteActivit
 	if err := activityService.activityOperation.DeleteActivity(activity); err != nil {
 		return NewApiResponse[ResponseDeleteActivity](&ErrDatabaseFail, Unsatisfied, nil)
 	}
+
+	go func() {
+		auditLog := activityService.auditLogOperation.NewAuditLog(operation.ActivityDeleted, req.Cid,
+			strconv.Itoa(int(activity.ID)), req.Ip, req.UserAgent, nil)
+		err := activityService.auditLogOperation.SaveAuditLog(auditLog)
+		if err != nil {
+			c.ErrorF("Fail to create audit log for activity_deleted, detail: %v", err)
+		}
+	}()
+
 	data := ResponseDeleteActivity(true)
 	return NewApiResponse(&SuccessDeleteActivity, Unsatisfied, &data)
 }
@@ -246,20 +276,36 @@ func (activityService *ActivityService) EditActivity(req *RequestEditActivity) *
 	activity, res := CallDBFuncAndCheckError[operation.Activity, ResponseEditActivity](func() (*operation.Activity, error) {
 		return activityService.activityOperation.GetActivityById(req.ID)
 	})
+	oldValue, _ := json.Marshal(activity)
 	if res != nil {
 		return res
 	}
-	updateInfo := req.Activity.Diff(activity)
 	if req.ImageUrl != "" && req.ImageUrl != activity.ImageUrl && activity.ImageUrl != "" {
 		_, err := activityService.storeService.DeleteImageFile(activity.ImageUrl)
 		if err != nil {
 			c.ErrorF("err while delete old activity image, %v", err)
 		}
 	}
+	updateInfo := req.Activity.Diff(activity)
 	err := activityService.activityOperation.UpdateActivityInfo(activity, req.Activity, updateInfo)
 	if err != nil {
 		return NewApiResponse[ResponseEditActivity](&ErrDatabaseFail, Unsatisfied, nil)
 	}
+
+	go func() {
+		newValue, _ := json.Marshal(req.Activity)
+		changeDetail := &operation.ChangeDetail{
+			OldValue: string(oldValue),
+			NewValue: string(newValue),
+		}
+		auditLog := activityService.auditLogOperation.NewAuditLog(operation.ActivityUpdated, req.Cid,
+			strconv.Itoa(int(req.Activity.ID)), req.Ip, req.UserAgent, changeDetail)
+		err := activityService.auditLogOperation.SaveAuditLog(auditLog)
+		if err != nil {
+			c.ErrorF("Fail to create audit log for activity_created, detail: %v", err)
+		}
+	}()
+
 	data := ResponseEditActivity(true)
 	return NewApiResponse(&SuccessEditActivity, Unsatisfied, &data)
 }

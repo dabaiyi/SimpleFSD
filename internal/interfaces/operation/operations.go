@@ -6,6 +6,7 @@ type DatabaseOperations struct {
 	flightPlanOperation FlightPlanOperationInterface
 	historyOperation    HistoryOperationInterface
 	activityOperation   ActivityOperationInterface
+	auditLogOperation   AuditLogOperationInterface
 }
 
 func NewDatabaseOperations(
@@ -13,12 +14,14 @@ func NewDatabaseOperations(
 	flightPlanOperation FlightPlanOperationInterface,
 	historyOperation HistoryOperationInterface,
 	activityOperation ActivityOperationInterface,
+	auditLogOperation AuditLogOperationInterface,
 ) *DatabaseOperations {
 	return &DatabaseOperations{
 		userOperation:       userOperation,
 		flightPlanOperation: flightPlanOperation,
 		historyOperation:    historyOperation,
 		activityOperation:   activityOperation,
+		auditLogOperation:   auditLogOperation,
 	}
 }
 
@@ -36,4 +39,8 @@ func (db *DatabaseOperations) HistoryOperation() HistoryOperationInterface {
 
 func (db *DatabaseOperations) ActivityOperation() ActivityOperationInterface {
 	return db.activityOperation
+}
+
+func (db *DatabaseOperations) AuditLogOperation() AuditLogOperationInterface {
+	return db.auditLogOperation
 }

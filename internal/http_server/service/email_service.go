@@ -127,7 +127,7 @@ func (emailService *EmailService) SendEmailCode(email string, cid int) error {
 	code := rand.Intn(9e5) + 1e5
 	emailCode := EmailCode{code: code, cid: cid, sendTime: time.Now()}
 	data := &EmailVerifyTemplateData{
-		Cid:     strconv.Itoa(cid),
+		Cid:     fmt.Sprintf("%04d", cid),
 		Code:    strconv.Itoa(code),
 		Expired: strconv.Itoa(int(emailService.config.VerifyExpiredDuration.Minutes())),
 	}
@@ -155,8 +155,8 @@ func (emailService *EmailService) SendEmailCode(email string, cid int) error {
 func (emailService *EmailService) SendPermissionChangeEmail(user *operation.User, operator *operation.User) error {
 	email := strings.ToLower(user.Email)
 	data := &EmailPermissionChangeData{
-		Cid:      strconv.Itoa(user.Cid),
-		Operator: strconv.Itoa(operator.Cid),
+		Cid:      fmt.Sprintf("%04d", user.Cid),
+		Operator: fmt.Sprintf("%04d", operator.Cid),
 		Contact:  operator.Email,
 	}
 	message, err := emailService.RenderTemplate(emailService.config.Template.PermissionChangeTemplate, data)
@@ -170,6 +170,8 @@ func (emailService *EmailService) SendPermissionChangeEmail(user *operation.User
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "管理权限变更通知")
 	m.SetBody("text/html", message)
+
+	c.InfoF("Sending permission change email to %s(%d)", email, user.Cid)
 
 	return emailService.config.EmailServer.DialAndSend(m)
 }
@@ -195,6 +197,8 @@ func (emailService *EmailService) SendRatingChangeEmail(user *operation.User, op
 	m.SetHeader("Subject", "管制权限变更通知")
 	m.SetBody("text/html", message)
 
+	c.InfoF("Sending rating change email to %s(%d)", email, user.Cid)
+
 	return emailService.config.EmailServer.DialAndSend(m)
 }
 
@@ -218,6 +222,8 @@ func (emailService *EmailService) SendKickedFromServerEmail(user *operation.User
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "踢出服务器通知")
 	m.SetBody("text/html", message)
+
+	c.InfoF("Sending kick message email to %s(%d)", email, user.Cid)
 
 	return emailService.config.EmailServer.DialAndSend(m)
 }

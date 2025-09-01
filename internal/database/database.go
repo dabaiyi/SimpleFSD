@@ -51,7 +51,7 @@ func ConnectDatabase(config *c.Config) (*DatabaseOperations, error) {
 		return nil, Errorf("error occured while connecting to operation: %v", err)
 	}
 
-	if err = db.Migrator().AutoMigrate(&User{}, &FlightPlan{}, &History{}, &Activity{}, &ActivityATC{}, &ActivityPilot{}, &ActivityFacility{}); err != nil {
+	if err = db.Migrator().AutoMigrate(&User{}, &FlightPlan{}, &History{}, &Activity{}, &ActivityATC{}, &ActivityPilot{}, &ActivityFacility{}, &AuditLog{}); err != nil {
 		return nil, Errorf("error occured while migrating operation: %v", err)
 	}
 
@@ -79,6 +79,7 @@ func ConnectDatabase(config *c.Config) (*DatabaseOperations, error) {
 	flightPlanOperation := NewFlightPlanOperation(db, queryTimeout, config.Server.General)
 	historyOperation := NewHistoryOperation(db, queryTimeout)
 	activityOperation := NewActivityOperation(db, queryTimeout)
+	auditLogOperation := NewAuditLogOperation(db, queryTimeout)
 
-	return NewDatabaseOperations(userOperation, flightPlanOperation, historyOperation, activityOperation), nil
+	return NewDatabaseOperations(userOperation, flightPlanOperation, historyOperation, activityOperation, auditLogOperation), nil
 }

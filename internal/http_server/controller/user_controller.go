@@ -9,13 +9,13 @@ import (
 )
 
 type UserControllerInterface interface {
-	UserRegisterHandler(ctx echo.Context) error
-	UserLoginHandler(ctx echo.Context) error
-	CheckUserAvailabilityHandler(ctx echo.Context) error
-	GetCurrentUserProfileHandler(ctx echo.Context) error
-	EditCurrentProfileHandler(ctx echo.Context) error
-	GetUserProfileHandler(ctx echo.Context) error
-	EditProfileHandler(ctx echo.Context) error
+	UserRegister(ctx echo.Context) error
+	UserLogin(ctx echo.Context) error
+	CheckUserAvailability(ctx echo.Context) error
+	GetCurrentUserProfile(ctx echo.Context) error
+	EditCurrentProfile(ctx echo.Context) error
+	GetUserProfile(ctx echo.Context) error
+	EditProfile(ctx echo.Context) error
 	GetUsers(ctx echo.Context) error
 	GetControllers(ctx echo.Context) error
 	EditUserPermission(ctx echo.Context) error
@@ -32,7 +32,7 @@ func NewUserHandler(service UserServiceInterface) *UserController {
 	return &UserController{service}
 }
 
-func (controller *UserController) UserRegisterHandler(ctx echo.Context) error {
+func (controller *UserController) UserRegister(ctx echo.Context) error {
 	data := &RequestUserRegister{}
 	if err := ctx.Bind(data); err != nil {
 		c.ErrorF("error binding data: %v", err)
@@ -41,7 +41,7 @@ func (controller *UserController) UserRegisterHandler(ctx echo.Context) error {
 	return controller.service.UserRegister(data).Response(ctx)
 }
 
-func (controller *UserController) UserLoginHandler(ctx echo.Context) error {
+func (controller *UserController) UserLogin(ctx echo.Context) error {
 	data := &RequestUserLogin{}
 	if err := ctx.Bind(data); err != nil {
 		c.ErrorF("error binding data: %v", err)
@@ -50,7 +50,7 @@ func (controller *UserController) UserLoginHandler(ctx echo.Context) error {
 	return controller.service.UserLogin(data).Response(ctx)
 }
 
-func (controller *UserController) CheckUserAvailabilityHandler(ctx echo.Context) error {
+func (controller *UserController) CheckUserAvailability(ctx echo.Context) error {
 	data := &RequestUserAvailability{}
 	if err := ctx.Bind(data); err != nil {
 		c.ErrorF("error binding data: %v", err)
@@ -59,14 +59,14 @@ func (controller *UserController) CheckUserAvailabilityHandler(ctx echo.Context)
 	return controller.service.CheckAvailability(data).Response(ctx)
 }
 
-func (controller *UserController) GetCurrentUserProfileHandler(ctx echo.Context) error {
+func (controller *UserController) GetCurrentUserProfile(ctx echo.Context) error {
 	token := ctx.Get("user").(*jwt.Token)
 	claim := token.Claims.(*Claims)
 	data := &RequestUserCurrentProfile{Uid: claim.Uid}
 	return controller.service.GetCurrentProfile(data).Response(ctx)
 }
 
-func (controller *UserController) EditCurrentProfileHandler(ctx echo.Context) error {
+func (controller *UserController) EditCurrentProfile(ctx echo.Context) error {
 	data := &RequestUserEditCurrentProfile{}
 	if err := ctx.Bind(data); err != nil {
 		c.ErrorF("error binding data: %v", err)
@@ -79,7 +79,7 @@ func (controller *UserController) EditCurrentProfileHandler(ctx echo.Context) er
 	return controller.service.EditCurrentProfile(data).Response(ctx)
 }
 
-func (controller *UserController) GetUserProfileHandler(ctx echo.Context) error {
+func (controller *UserController) GetUserProfile(ctx echo.Context) error {
 	data := &RequestUserProfile{}
 	if err := ctx.Bind(data); err != nil {
 		c.ErrorF("error binding data: %v", err)
@@ -92,7 +92,7 @@ func (controller *UserController) GetUserProfileHandler(ctx echo.Context) error 
 	return controller.service.GetUserProfile(data).Response(ctx)
 }
 
-func (controller *UserController) EditProfileHandler(ctx echo.Context) error {
+func (controller *UserController) EditProfile(ctx echo.Context) error {
 	data := &RequestUserEditProfile{}
 	if err := ctx.Bind(data); err != nil {
 		c.ErrorF("error binding data: %v", err)
@@ -103,6 +103,8 @@ func (controller *UserController) EditProfileHandler(ctx echo.Context) error {
 	data.Uid = claim.Uid
 	data.Cid = claim.Cid
 	data.Permission = claim.Permission
+	data.Ip = ctx.RealIP()
+	data.UserAgent = ctx.Request().UserAgent()
 	return controller.service.EditUserProfile(data).Response(ctx)
 }
 
@@ -142,6 +144,9 @@ func (controller *UserController) EditUserPermission(ctx echo.Context) error {
 	claim := token.Claims.(*Claims)
 	data.Uid = claim.Uid
 	data.Permission = claim.Permission
+	data.Cid = claim.Cid
+	data.Ip = ctx.RealIP()
+	data.UserAgent = ctx.Request().UserAgent()
 	return controller.service.EditUserPermission(data).Response(ctx)
 }
 
@@ -153,8 +158,11 @@ func (controller *UserController) EditUserRating(ctx echo.Context) error {
 	}
 	token := ctx.Get("user").(*jwt.Token)
 	claim := token.Claims.(*Claims)
+	data.Cid = claim.Cid
 	data.Uid = claim.Uid
 	data.Permission = claim.Permission
+	data.Ip = ctx.RealIP()
+	data.UserAgent = ctx.Request().UserAgent()
 	return controller.service.EditUserRating(data).Response(ctx)
 }
 

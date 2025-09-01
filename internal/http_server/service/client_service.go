@@ -3,6 +3,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	c "github.com/half-nothing/simple-fsd/internal/config"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/operation"
@@ -12,11 +13,12 @@ import (
 )
 
 type ClientService struct {
-	onlineClient  *utils.CachedValue[OnlineClients]
-	clientManager fsd.ClientManagerInterface
-	emailService  EmailServiceInterface
-	config        *c.HttpServerConfig
-	userOperation operation.UserOperationInterface
+	onlineClient      *utils.CachedValue[OnlineClients]
+	clientManager     fsd.ClientManagerInterface
+	emailService      EmailServiceInterface
+	config            *c.HttpServerConfig
+	userOperation     operation.UserOperationInterface
+	auditLogOperation operation.AuditLogOperationInterface
 }
 
 func NewClientService(
@@ -24,12 +26,14 @@ func NewClientService(
 	clientManager fsd.ClientManagerInterface,
 	emailService EmailServiceInterface,
 	userOperation operation.UserOperationInterface,
+	auditLogOperation operation.AuditLogOperationInterface,
 ) *ClientService {
 	service := &ClientService{
-		clientManager: clientManager,
-		emailService:  emailService,
-		config:        config,
-		userOperation: userOperation,
+		clientManager:     clientManager,
+		emailService:      emailService,
+		config:            config,
+		userOperation:     userOperation,
+		auditLogOperation: auditLogOperation,
 	}
 	service.onlineClient = utils.NewCachedValue[OnlineClients](config.CacheDuration, func() *OnlineClients { return service.getOnlineClient() })
 	return service
@@ -99,6 +103,7 @@ func (clientService *ClientService) GetOnlineClient() *OnlineClients {
 }
 
 var (
+	ErrSendMessage      = ApiStatus{StatusName: "FAIL_SEND_MESSAGE", Description: "发送消息失败", HttpCode: ServerInternalError}
 	ErrCallsignNotFound = ApiStatus{StatusName: "CALLSIGN_NOT_FOUND", Description: "发送目标不在线", HttpCode: NotFound}
 	SuccessSendMessage  = ApiStatus{StatusName: "SEND_MESSAGE", Description: "发送成功", HttpCode: Ok}
 )
@@ -114,9 +119,22 @@ func (clientService *ClientService) SendMessageToClient(req *RequestSendMessageT
 	if !permission.HasPermission(operation.ClientSendMessage) {
 		return NewApiResponse[ResponseSendMessageToClient](&ErrNoPermission, Unsatisfied, nil)
 	}
-	if err := clientService.clientManager.SendRawMessageTo(req.Cid, req.SendTo, req.Message); errors.Is(err, fsd.ErrCallsignNotFound) {
-		return NewApiResponse[ResponseSendMessageToClient](&ErrCallsignNotFound, Unsatisfied, nil)
+	if err := clientService.clientManager.SendRawMessageTo(req.Cid, req.SendTo, req.Message); err != nil {
+		if errors.Is(err, fsd.ErrCallsignNotFound) {
+			return NewApiResponse[ResponseSendMessageToClient](&ErrCallsignNotFound, Unsatisfied, nil)
+		}
+		return NewApiResponse[ResponseSendMessageToClient](&ErrSendMessage, Unsatisfied, nil)
 	}
+
+	go func() {
+		auditLog := clientService.auditLogOperation.NewAuditLog(operation.ClientMessage, req.Cid,
+			fmt.Sprintf("%s(%s)", req.SendTo, req.Message), req.Ip, req.UserAgent, nil)
+		err := clientService.auditLogOperation.SaveAuditLog(auditLog)
+		if err != nil {
+			c.ErrorF("Fail to create audit log for client_message, detail: %v", err)
+		}
+	}()
+
 	data := ResponseSendMessageToClient(true)
 	return NewApiResponse[ResponseSendMessageToClient](&SuccessSendMessage, Unsatisfied, &data)
 }
@@ -142,11 +160,24 @@ func (clientService *ClientService) KillClient(req *RequestKillClient) *ApiRespo
 		return NewApiResponse[ResponseKillClient](&ErrCallsignNotFound, Unsatisfied, nil)
 	}
 	client.MarkedDisconnect(false)
-	if clientService.config.Email.Template.EnableKickedFromServerEmail {
-		if err := clientService.emailService.SendKickedFromServerEmail(client.User(), user, req.Reason); err != nil {
-			c.ErrorF("SendRatingChangeEmail Failed: %v", err)
+
+	go func() {
+		if clientService.config.Email.Template.EnableKickedFromServerEmail {
+			if err := clientService.emailService.SendKickedFromServerEmail(client.User(), user, req.Reason); err != nil {
+				c.ErrorF("SendRatingChangeEmail Failed: %v", err)
+			}
 		}
-	}
+	}()
+
+	go func() {
+		auditLog := clientService.auditLogOperation.NewAuditLog(operation.ClientKicked, req.Cid,
+			fmt.Sprintf("%s(%s)", req.TargetCallsign, req.Reason), req.Ip, req.UserAgent, nil)
+		err := clientService.auditLogOperation.SaveAuditLog(auditLog)
+		if err != nil {
+			c.ErrorF("Fail to create audit log for client_kicked, detail: %v", err)
+		}
+	}()
+
 	data := ResponseKillClient(true)
 	return NewApiResponse[ResponseKillClient](&SuccessKillClient, Unsatisfied, &data)
 }

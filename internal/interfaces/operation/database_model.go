@@ -93,33 +93,43 @@ func (facility *Activity) Equal(other *Activity) bool {
 func (facility *Activity) Diff(other *Activity) map[string]interface{} {
 	result := make(map[string]interface{})
 	if facility.Publisher != 0 && facility.Publisher != other.Publisher {
+		other.Publisher = facility.Publisher
 		result["publisher"] = facility.Publisher
 	}
 	if facility.Title != "" && facility.Title != other.Title {
+		other.Title = facility.Title
 		result["title"] = facility.Title
 	}
 	if facility.ImageUrl != "" && facility.ImageUrl != other.ImageUrl {
+		other.ImageUrl = facility.ImageUrl
 		result["image_url"] = facility.ImageUrl
 	}
 	if facility.ActiveTime != other.ActiveTime {
+		other.ActiveTime = facility.ActiveTime
 		result["active_time"] = facility.ActiveTime
 	}
 	if facility.DepartureAirport != "" && facility.DepartureAirport != other.DepartureAirport {
+		other.DepartureAirport = facility.DepartureAirport
 		result["departure_airport"] = facility.DepartureAirport
 	}
 	if facility.ArrivalAirport != "" && facility.ArrivalAirport != other.ArrivalAirport {
+		other.ArrivalAirport = facility.ArrivalAirport
 		result["arrival_airport"] = facility.ArrivalAirport
 	}
 	if facility.Route != "" && facility.Route != other.Route {
+		other.Route = facility.Route
 		result["route"] = facility.Route
 	}
 	if facility.Distance != 0 && facility.Distance != other.Distance {
+		other.Distance = facility.Distance
 		result["distance"] = facility.Distance
 	}
 	if facility.Status != other.Status {
+		other.Status = facility.Status
 		result["status"] = facility.Status
 	}
 	if facility.NOTAMS != other.NOTAMS {
+		other.NOTAMS = facility.NOTAMS
 		result["NOTAMS"] = facility.NOTAMS
 	}
 	return result
@@ -173,4 +183,20 @@ type ActivityPilot struct {
 	Status       int       `gorm:"default:0;not null" json:"status"`
 	CreatedAt    time.Time `json:"-"`
 	UpdatedAt    time.Time `json:"-"`
+}
+
+type AuditLog struct {
+	ID            uint          `gorm:"primarykey" json:"id"`
+	CreatedAt     time.Time     `gorm:"not null" json:"time"`
+	EventType     string        `gorm:"index:eventType;not null" json:"event_type"`
+	Subject       int           `gorm:"index:Subject;not null" json:"subject"`
+	Object        string        `gorm:"index:Object;not null" json:"object"`
+	Ip            string        `gorm:"not null" json:"ip"`
+	UserAgent     string        `gorm:"not null" json:"user_agent"`
+	ChangeDetails *ChangeDetail `gorm:"type:text;serializer:json" json:"change_details"`
+}
+
+type ChangeDetail struct {
+	OldValue string `json:"old_value"`
+	NewValue string `json:"new_value"`
 }

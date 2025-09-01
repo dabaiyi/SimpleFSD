@@ -2,6 +2,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	c "github.com/half-nothing/simple-fsd/internal/config"
@@ -9,16 +10,18 @@ import (
 	"github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/service"
 	"github.com/half-nothing/simple-fsd/internal/utils"
+	"strconv"
 	"strings"
 	"time"
 )
 
 type UserService struct {
-	emailService     EmailServiceInterface
-	config           *c.HttpServerConfig
-	userOperation    operation.UserOperationInterface
-	historyOperation operation.HistoryOperationInterface
-	storeService     StoreServiceInterface
+	emailService      EmailServiceInterface
+	config            *c.HttpServerConfig
+	userOperation     operation.UserOperationInterface
+	historyOperation  operation.HistoryOperationInterface
+	storeService      StoreServiceInterface
+	auditLogOperation operation.AuditLogOperationInterface
 }
 
 func NewUserService(
@@ -27,13 +30,15 @@ func NewUserService(
 	userOperation operation.UserOperationInterface,
 	historyOperation operation.HistoryOperationInterface,
 	storeService StoreServiceInterface,
+	auditLogOperation operation.AuditLogOperationInterface,
 ) *UserService {
 	return &UserService{
-		emailService:     emailService,
-		config:           config,
-		userOperation:    userOperation,
-		historyOperation: historyOperation,
-		storeService:     storeService,
+		emailService:      emailService,
+		config:            config,
+		userOperation:     userOperation,
+		historyOperation:  historyOperation,
+		storeService:      storeService,
+		auditLogOperation: auditLogOperation,
 	}
 }
 
@@ -175,57 +180,59 @@ func checkQQ(qq int) *ApiStatus {
 	return &ErrQQInvalid
 }
 
-func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfile, skipEmailVerify bool) (*ApiStatus, *operation.User) {
+func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfile, skipEmailVerify bool) (*ApiStatus, *operation.User, string) {
 	if req.Username == "" && req.Email == "" && req.QQ <= 0 && req.OriginPassword == "" && req.NewPassword == "" && req.AvatarUrl == "" {
-		return &ErrIllegalParam, nil
+		return &ErrIllegalParam, nil, ""
 	}
 	if req.OriginPassword != "" && req.NewPassword != "" {
 		if err := passwordValidator.CheckString(req.NewPassword); err != nil {
-			return err, nil
+			return err, nil, ""
 		}
 	} else if req.OriginPassword != "" && req.NewPassword == "" {
-		return &ErrNewPasswordRequired, nil
+		return &ErrNewPasswordRequired, nil, ""
 	} else if req.OriginPassword == "" && req.NewPassword != "" {
-		return &ErrOriginPasswordRequired, nil
+		return &ErrOriginPasswordRequired, nil, ""
 	}
 	if req.Username != "" {
 		if err := usernameValidator.CheckString(req.Username); err != nil {
-			return err, nil
+			return err, nil, ""
 		}
 	}
 	if req.Email != "" {
 		if err := emailValidator.CheckString(req.Email); err != nil {
-			return err, nil
+			return err, nil, ""
 		}
 		if !skipEmailVerify {
 			if req.EmailCode <= 0 {
-				return &ErrIllegalParam, nil
+				return &ErrIllegalParam, nil, ""
 			}
 
 			if res := userService.verifyEmailCode(req.Email, req.EmailCode, req.Cid); res != nil {
-				return res, nil
+				return res, nil, ""
 			}
 		}
 	}
 	if req.QQ > 0 {
 		if err := checkQQ(req.QQ); err != nil {
-			return err, nil
+			return err, nil, ""
 		}
 	}
 
 	user, err := userService.userOperation.GetUserByUid(req.ID)
 	if errors.Is(err, operation.ErrUserNotFound) {
-		return &ErrUserNotFound, nil
+		return &ErrUserNotFound, nil, ""
 	} else if err != nil {
-		return &ErrDatabaseFail, nil
+		return &ErrDatabaseFail, nil, ""
 	}
 
 	updateInfo := make(map[string]interface{})
 
+	oldValue, _ := json.Marshal(user)
+
 	if req.Username != "" || req.Email != "" {
 		exist, _ := userService.userOperation.IsUserIdentifierTaken(nil, 0, req.Username, req.Email)
 		if exist {
-			return &ErrIdentifierTaken, nil
+			return &ErrIdentifierTaken, nil, ""
 		}
 		if req.Username != "" && req.Username != user.Username {
 			user.Username = req.Username
@@ -260,28 +267,28 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 	if req.OriginPassword != "" {
 		password, err := userService.userOperation.UpdateUserPassword(user, req.OriginPassword, req.NewPassword)
 		if errors.Is(err, operation.ErrUserNotFound) {
-			return &ErrUserNotFound, nil
+			return &ErrUserNotFound, nil, ""
 		} else if errors.Is(err, operation.ErrOldPassword) {
-			return &ErrOriginPassword, nil
+			return &ErrOriginPassword, nil, ""
 		} else if err != nil {
-			return &ErrDatabaseFail, nil
+			return &ErrDatabaseFail, nil, ""
 		}
 		updateInfo["password"] = password
 	}
 
 	if err := userService.userOperation.UpdateUserInfo(user, updateInfo); err != nil {
 		if errors.Is(err, operation.ErrUserNotFound) {
-			return &ErrUserNotFound, nil
+			return &ErrUserNotFound, nil, ""
 		} else {
-			return &ErrDatabaseFail, nil
+			return &ErrDatabaseFail, nil, ""
 		}
 	}
 
-	return nil, user
+	return nil, user, string(oldValue)
 }
 
 func (userService *UserService) EditCurrentProfile(req *RequestUserEditCurrentProfile) *ApiResponse[ResponseUserEditCurrentProfile] {
-	if err, user := userService.editUserProfile(req, false); err != nil {
+	if err, user, _ := userService.editUserProfile(req, false); err != nil {
 		return NewApiResponse[ResponseUserEditCurrentProfile](err, Unsatisfied, nil)
 	} else {
 		return NewApiResponse(&SuccessEditCurrentProfile, Unsatisfied, (*ResponseUserEditCurrentProfile)(user))
@@ -325,10 +332,22 @@ func (userService *UserService) EditUserProfile(req *RequestUserEditProfile) *Ap
 		return NewApiResponse[ResponseUserEditProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
 	req.ID = req.TargetUid
-	err, user := userService.editUserProfile(&req.RequestUserEditCurrentProfile, true)
+	err, user, oldValue := userService.editUserProfile(&req.RequestUserEditCurrentProfile, true)
 	if err != nil {
 		return NewApiResponse[ResponseUserEditProfile](err, Unsatisfied, nil)
 	}
+	go func() {
+		newValue, _ := json.Marshal(user)
+		auditLog := userService.auditLogOperation.NewAuditLog(operation.UserInformationEdit, req.Cid, strconv.Itoa(user.Cid),
+			req.Ip, req.UserAgent, &operation.ChangeDetail{
+				OldValue: oldValue,
+				NewValue: string(newValue),
+			})
+		err := userService.auditLogOperation.SaveAuditLog(auditLog)
+		if err != nil {
+			c.ErrorF("Fail to create audit log for user_information_edit, detail: %v", err)
+		}
+	}()
 	return NewApiResponse(&SuccessEditUserProfile, Unsatisfied, (*ResponseUserEditProfile)(user))
 }
 
@@ -397,6 +416,7 @@ func (userService *UserService) EditUserPermission(req *RequestUserEditPermissio
 	}
 	permission := operation.Permission(user.Permission)
 	targetPermission := operation.Permission(targetUser.Permission)
+	auditLogs := make([]*operation.AuditLog, 0, len(req.Permissions))
 	for key, value := range req.Permissions {
 		if per, ok := operation.PermissionMap[key]; ok {
 			if !permission.HasPermission(per) {
@@ -405,8 +425,12 @@ func (userService *UserService) EditUserPermission(req *RequestUserEditPermissio
 			if value, ok := value.(bool); ok {
 				if value {
 					targetPermission.Grant(per)
+					auditLogs = append(auditLogs, userService.auditLogOperation.NewAuditLog(operation.UserPermissionGrant, req.Cid,
+						fmt.Sprintf("%04d(%s)", targetUser.Cid, key), req.Ip, req.UserAgent, nil))
 				} else {
 					targetPermission.Revoke(per)
+					auditLogs = append(auditLogs, userService.auditLogOperation.NewAuditLog(operation.UserPermissionRevoke, req.Cid,
+						fmt.Sprintf("%04d(%s)", targetUser.Cid, key), req.Ip, req.UserAgent, nil))
 				}
 			} else {
 				return NewApiResponse[ResponseUserEditPermission](&ErrIllegalParam, Unsatisfied, nil)
@@ -428,7 +452,13 @@ func (userService *UserService) EditUserPermission(req *RequestUserEditPermissio
 		}
 	}
 
-	return NewApiResponse(&SuccessEditUserPermission, Unsatisfied, (*ResponseUserEditPermission)(user))
+	go func() {
+		err := userService.auditLogOperation.SaveAuditLogs(auditLogs)
+		if err != nil {
+			c.ErrorF("Fail to create audit log for user_permission_change, detail: %v", err)
+		}
+	}()
+	return NewApiResponse(&SuccessEditUserPermission, Unsatisfied, (*ResponseUserEditPermission)(targetUser))
 }
 
 var (
@@ -456,13 +486,26 @@ func (userService *UserService) EditUserRating(req *RequestUserEditRating) *ApiR
 		return res
 	}
 
+	go func() {
+		changeDetail := &operation.ChangeDetail{
+			OldValue: oldRating.String(),
+			NewValue: newRating.String(),
+		}
+		auditLog := userService.auditLogOperation.NewAuditLog(operation.UserRatingChange, req.Cid,
+			strconv.Itoa(targetUser.Cid), req.Ip, req.UserAgent, changeDetail)
+		err := userService.auditLogOperation.SaveAuditLog(auditLog)
+		if err != nil {
+			c.ErrorF("Fail to create audit log for user_rating_change, detail: %v", err)
+		}
+	}()
+
 	if userService.config.Email.Template.EnableRatingChangeEmail {
 		if err := userService.emailService.SendRatingChangeEmail(targetUser, user, oldRating, newRating); err != nil {
 			c.ErrorF("SendRatingChangeEmail Failed: %v", err)
 		}
 	}
 
-	return NewApiResponse(&SuccessEditUserRating, Unsatisfied, (*ResponseUserEditRating)(user))
+	return NewApiResponse(&SuccessEditUserRating, Unsatisfied, (*ResponseUserEditRating)(targetUser))
 }
 
 var SuccessGetUserHistory = ApiStatus{StatusName: "GET_USER_HISTORY", Description: "成功获取用户历史数据", HttpCode: Ok}

@@ -8,7 +8,6 @@ const (
 	AdminEntry Permission = 1 << iota
 	UserShowList
 	UserGetProfile
-	UserAdd
 	UserEditBaseInfo
 	UserEditPermission
 	UserEditRating
@@ -18,6 +17,7 @@ const (
 	ActivityEditState
 	ActivityEditPilotState
 	ActivityDelete
+	AuditLogShow
 	ClientSendMessage
 	ClientKill
 )
@@ -26,7 +26,6 @@ var PermissionMap = map[string]Permission{
 	"AdminEntry":             AdminEntry,
 	"UserShowList":           UserShowList,
 	"UserGetProfile":         UserGetProfile,
-	"UserAdd":                UserAdd,
 	"UserEditBaseInfo":       UserEditBaseInfo,
 	"UserEditPermission":     UserEditPermission,
 	"UserEditRating":         UserEditRating,

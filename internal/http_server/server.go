@@ -59,6 +59,10 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 		e.IPExtractor = echo.ExtractIPDirect()
 	}
 
+	if config.Server.HttpServer.SSL.ForceSSL {
+		e.Use(middleware.HTTPSRedirect())
+	}
+
 	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{Timeout: 30 * time.Second}))
 	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
 		LogErrorFunc: func(ctx echo.Context, err error, stack []byte) error {
@@ -148,11 +152,12 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 		storeService = impl.NewTencentCosStoreService(storeService, httpConfig.Store)
 	}
 
-	userService := impl.NewUserService(emailService, httpConfig, applicationContent.UserOperation(), applicationContent.HistoryOperation(), storeService)
+	userService := impl.NewUserService(emailService, httpConfig, applicationContent.UserOperation(), applicationContent.HistoryOperation(), storeService, applicationContent.AuditLogOperation())
 	clientManager := packet.NewClientManager(applicationContent)
-	clientService := impl.NewClientService(httpConfig, clientManager, emailService, applicationContent.UserOperation())
+	clientService := impl.NewClientService(httpConfig, clientManager, emailService, applicationContent.UserOperation(), applicationContent.AuditLogOperation())
 	serverService := impl.NewServerService(config.Server, applicationContent.UserOperation(), applicationContent.ActivityOperation())
-	activityService := impl.NewActivityService(httpConfig, applicationContent.UserOperation(), applicationContent.ActivityOperation(), storeService)
+	activityService := impl.NewActivityService(httpConfig, applicationContent.UserOperation(), applicationContent.ActivityOperation(), storeService, applicationContent.AuditLogOperation())
+	auditLogService := impl.NewAuditService(applicationContent.AuditLogOperation())
 
 	userController := controller.NewUserHandler(userService)
 	emailController := controller.NewEmailController(emailService)
@@ -160,22 +165,23 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	serverController := controller.NewServerController(serverService)
 	activityController := controller.NewActivityController(activityService)
 	fileController := controller.NewFileController(storeService)
+	auditLogController := controller.NewAuditLogController(auditLogService)
 
 	apiGroup := e.Group("/api")
-	apiGroup.POST("/sessions", userController.UserLoginHandler)
+	apiGroup.POST("/sessions", userController.UserLogin)
 	apiGroup.GET("/sessions", userController.GetToken, jwtMiddleware)
 	apiGroup.POST("/codes", emailController.SendVerifyEmail)
-	apiGroup.GET("/profile", userController.GetCurrentUserProfileHandler, jwtMiddleware)
-	apiGroup.PATCH("/profile", userController.EditCurrentProfileHandler, jwtMiddleware)
+	apiGroup.GET("/profile", userController.GetCurrentUserProfile, jwtMiddleware)
+	apiGroup.PATCH("/profile", userController.EditCurrentProfile, jwtMiddleware)
 	apiGroup.GET("/history", userController.GetUserHistory, jwtMiddleware)
 
 	userGroup := apiGroup.Group("/users")
-	userGroup.POST("", userController.UserRegisterHandler)
+	userGroup.POST("", userController.UserRegister)
 	userGroup.GET("", userController.GetUsers, jwtMiddleware)
 	userGroup.GET("/controllers", userController.GetControllers, jwtMiddleware)
-	userGroup.GET("/availability", userController.CheckUserAvailabilityHandler)
-	userGroup.GET("/:uid/profile", userController.GetUserProfileHandler, jwtMiddleware)
-	userGroup.PATCH("/:uid/profile", userController.EditProfileHandler, jwtMiddleware)
+	userGroup.GET("/availability", userController.CheckUserAvailability)
+	userGroup.GET("/:uid/profile", userController.GetUserProfile, jwtMiddleware)
+	userGroup.PATCH("/:uid/profile", userController.EditProfile, jwtMiddleware)
 	userGroup.PATCH("/:uid/permission", userController.EditUserPermission, jwtMiddleware)
 	userGroup.PUT("/:uid/rating", userController.EditUserRating, jwtMiddleware)
 
@@ -207,6 +213,9 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 
 	fileGroup := apiGroup.Group("/files")
 	fileGroup.POST("/images", fileController.UploadImages, jwtMiddleware)
+
+	auditLogGroup := apiGroup.Group("/audits")
+	auditLogGroup.GET("", auditLogController.GetAuditLogs, jwtMiddleware)
 
 	apiGroup.Use(middleware.Static(httpConfig.Store.LocalStorePath))
 

@@ -56,6 +56,7 @@ type OnlineClients struct {
 
 type RequestSendMessageToClient struct {
 	JwtHeader
+	EchoContentHeader
 	Cid     int
 	SendTo  string `param:"callsign"`
 	Message string `json:"message"`
@@ -65,6 +66,8 @@ type ResponseSendMessageToClient bool
 
 type RequestKillClient struct {
 	JwtHeader
+	EchoContentHeader
+	Cid            int
 	TargetCallsign string `param:"callsign"`
 	Reason         string `json:"reason"`
 }
