@@ -178,8 +178,8 @@ func (userOperation *UserOperation) UpdateUserInfo(user *User, info map[string]i
 	return userOperation.db.WithContext(ctx).Model(user).Updates(info).Error
 }
 
-func (userOperation *UserOperation) UpdateUserPassword(user *User, originalPassword, newPassword string) ([]byte, error) {
-	if !userOperation.VerifyUserPassword(user, originalPassword) {
+func (userOperation *UserOperation) UpdateUserPassword(user *User, originalPassword, newPassword string, skipVerify bool) ([]byte, error) {
+	if !skipVerify && !userOperation.VerifyUserPassword(user, originalPassword) {
 		return nil, ErrOldPassword
 	}
 	encodePassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), userOperation.config.BcryptCost)

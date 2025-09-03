@@ -8,6 +8,7 @@ const (
 	AdminEntry Permission = 1 << iota
 	UserShowList
 	UserGetProfile
+	UserSetPassword
 	UserEditBaseInfo
 	UserEditPermission
 	UserEditRating

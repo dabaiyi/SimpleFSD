@@ -72,7 +72,7 @@ type UserOperationInterface interface {
 	// UpdateUserInfo 批量更新用户信息, 当err为nil时表示更新成功
 	UpdateUserInfo(user *User, info map[string]interface{}) (err error)
 	// UpdateUserPassword 更新用户密码(不写入数据库, 仅验证), 当err为nil时返回值encodePassword有效
-	UpdateUserPassword(user *User, originalPassword, newPassword string) (encodePassword []byte, err error)
+	UpdateUserPassword(user *User, originalPassword, newPassword string, skipVerify bool) (encodePassword []byte, err error)
 	// SaveUser 保存用户数据, 强制整个用户结构体到数据库, 谨慎使用, 当err为nil时表示更新成功
 	SaveUser(user *User) (err error)
 	// VerifyUserPassword 验证用户密码是否正确, pass为true表示验证通过

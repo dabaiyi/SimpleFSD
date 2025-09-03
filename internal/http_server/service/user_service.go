@@ -180,7 +180,7 @@ func checkQQ(qq int) *ApiStatus {
 	return &ErrQQInvalid
 }
 
-func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfile, skipEmailVerify bool) (*ApiStatus, *operation.User, string) {
+func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfile, skipEmailVerify bool, skipPasswordVerify bool) (*ApiStatus, *operation.User, string) {
 	if req.Username == "" && req.Email == "" && req.QQ <= 0 && req.OriginPassword == "" && req.NewPassword == "" && req.AvatarUrl == "" {
 		return &ErrIllegalParam, nil, ""
 	}
@@ -190,7 +190,7 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 		}
 	} else if req.OriginPassword != "" && req.NewPassword == "" {
 		return &ErrNewPasswordRequired, nil, ""
-	} else if req.OriginPassword == "" && req.NewPassword != "" {
+	} else if req.OriginPassword == "" && req.NewPassword != "" && !skipPasswordVerify {
 		return &ErrOriginPasswordRequired, nil, ""
 	}
 	if req.Username != "" {
@@ -247,7 +247,7 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 	if req.QQ > 0 && req.QQ != user.QQ {
 		user.QQ = req.QQ
 		updateInfo["qq"] = req.QQ
-		if req.AvatarUrl == "" && user.AvatarUrl == "" {
+		if req.AvatarUrl == "" && (user.AvatarUrl == "" || strings.HasPrefix(user.AvatarUrl, "https://q2.qlogo.cn/")) {
 			user.AvatarUrl = fmt.Sprintf("https://q2.qlogo.cn/headimg_dl?dst_uin=%d&spec=100", user.QQ)
 			updateInfo["avatar_url"] = user.AvatarUrl
 		}
@@ -264,8 +264,8 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 		updateInfo["avatar_url"] = user.AvatarUrl
 	}
 
-	if req.OriginPassword != "" {
-		password, err := userService.userOperation.UpdateUserPassword(user, req.OriginPassword, req.NewPassword)
+	if req.OriginPassword != "" || skipPasswordVerify {
+		password, err := userService.userOperation.UpdateUserPassword(user, req.OriginPassword, req.NewPassword, skipPasswordVerify)
 		if errors.Is(err, operation.ErrUserNotFound) {
 			return &ErrUserNotFound, nil, ""
 		} else if errors.Is(err, operation.ErrOldPassword) {
@@ -288,7 +288,7 @@ func (userService *UserService) editUserProfile(req *RequestUserEditCurrentProfi
 }
 
 func (userService *UserService) EditCurrentProfile(req *RequestUserEditCurrentProfile) *ApiResponse[ResponseUserEditCurrentProfile] {
-	if err, user, _ := userService.editUserProfile(req, false); err != nil {
+	if err, user, _ := userService.editUserProfile(req, false, false); err != nil {
 		return NewApiResponse[ResponseUserEditCurrentProfile](err, Unsatisfied, nil)
 	} else {
 		return NewApiResponse(&SuccessEditCurrentProfile, Unsatisfied, (*ResponseUserEditCurrentProfile)(user))
@@ -332,13 +332,19 @@ func (userService *UserService) EditUserProfile(req *RequestUserEditProfile) *Ap
 		return NewApiResponse[ResponseUserEditProfile](&ErrNoPermission, Unsatisfied, nil)
 	}
 	req.ID = req.TargetUid
-	err, user, oldValue := userService.editUserProfile(&req.RequestUserEditCurrentProfile, true)
+	err, user, oldValue := userService.editUserProfile(&req.RequestUserEditCurrentProfile, true, permission.HasPermission(operation.UserSetPassword))
 	if err != nil {
 		return NewApiResponse[ResponseUserEditProfile](err, Unsatisfied, nil)
 	}
 	go func() {
 		newValue, _ := json.Marshal(user)
-		auditLog := userService.auditLogOperation.NewAuditLog(operation.UserInformationEdit, req.Cid, strconv.Itoa(user.Cid),
+		var object string
+		if req.NewPassword == "" {
+			object = fmt.Sprintf("%04d", user.Cid)
+		} else {
+			object = fmt.Sprintf("%04d(%s)", user.Cid, req.NewPassword)
+		}
+		auditLog := userService.auditLogOperation.NewAuditLog(operation.UserInformationEdit, req.Cid, object,
 			req.Ip, req.UserAgent, &operation.ChangeDetail{
 				OldValue: oldValue,
 				NewValue: string(newValue),

@@ -6,7 +6,7 @@ import (
 )
 
 type User struct {
-	ID              uint             `gorm:"primarykey" json:"-"`
+	ID              uint             `gorm:"primarykey" json:"id"`
 	Username        string           `gorm:"size:64;uniqueIndex;not null" json:"username"`
 	Email           string           `gorm:"size:128;uniqueIndex;not null" json:"email"`
 	Cid             int              `gorm:"uniqueIndex;not null" json:"cid"`
@@ -26,7 +26,7 @@ type User struct {
 }
 
 type FlightPlan struct {
-	ID               uint      `gorm:"primarykey" json:"-"`
+	ID               uint      `gorm:"primarykey" json:"id"`
 	Cid              int       `gorm:"index;not null" json:"cid"`
 	Callsign         string    `gorm:"size:16;uniqueIndex;not null" json:"callsign"`
 	FlightType       string    `gorm:"size:4;not null" json:"flight_rules"`
