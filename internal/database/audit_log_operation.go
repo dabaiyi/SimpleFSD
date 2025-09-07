@@ -3,18 +3,20 @@ package database
 
 import (
 	"context"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"gorm.io/gorm"
 	"time"
 )
 
 type AuditLogOperation struct {
+	logger       log.LoggerInterface
 	db           *gorm.DB
 	queryTimeout time.Duration
 }
 
-func NewAuditLogOperation(db *gorm.DB, queryTimeout time.Duration) *AuditLogOperation {
-	return &AuditLogOperation{db: db, queryTimeout: queryTimeout}
+func NewAuditLogOperation(logger log.LoggerInterface, db *gorm.DB, queryTimeout time.Duration) *AuditLogOperation {
+	return &AuditLogOperation{logger: logger, db: db, queryTimeout: queryTimeout}
 }
 
 func (auditLogOperation *AuditLogOperation) NewAuditLog(eventType EventType, subject int, object, ip, userAgent string, changeDetails *ChangeDetail) (auditLog *AuditLog) {

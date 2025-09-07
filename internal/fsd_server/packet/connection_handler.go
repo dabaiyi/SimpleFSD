@@ -3,8 +3,10 @@ package packet
 import (
 	"bufio"
 	"fmt"
-	c "github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/config"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/global"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"net"
 	"sync/atomic"
@@ -16,7 +18,8 @@ var (
 	splitSignLen = len(splitSign)
 )
 
-type ConnectionHandler struct {
+type Session struct {
+	logger              log.LoggerInterface
 	conn                net.Conn
 	connId              string
 	callsign            string
@@ -24,19 +27,21 @@ type ConnectionHandler struct {
 	clientManager       ClientManagerInterface
 	user                *operation.User
 	disconnected        atomic.Bool
-	config              *c.OtherConfig
+	config              *config.GeneralConfig
 	userOperation       operation.UserOperationInterface
 	flightPlanOperation operation.FlightPlanOperationInterface
 }
 
-func NewConnectionHandler(
+func NewSession(
+	logger log.LoggerInterface,
+	config *config.GeneralConfig,
 	conn net.Conn,
-	config *c.OtherConfig,
 	cm ClientManagerInterface,
 	userOperation operation.UserOperationInterface,
 	flightPlanOperation operation.FlightPlanOperationInterface,
-) *ConnectionHandler {
-	return &ConnectionHandler{
+) *Session {
+	return &Session{
+		logger:              logger,
 		conn:                conn,
 		connId:              conn.RemoteAddr().String(),
 		callsign:            "unknown",
@@ -50,79 +55,79 @@ func NewConnectionHandler(
 	}
 }
 
-func (ch *ConnectionHandler) SendError(result *Result) {
+func (session *Session) SendError(result *Result) {
 	if result.Success {
 		return
 	}
-	if ch.client != nil {
-		ch.client.SendError(result)
+	if session.client != nil {
+		session.client.SendError(result)
 		return
 	}
-	packet := makePacket(Error, "fsd_server", ch.callsign, fmt.Sprintf("%03d", result.Errno.Index()), result.Env, result.Errno.String())
-	c.DebugF("[%s](%s) <- %s", ch.connId, ch.callsign, packet[:len(packet)-splitSignLen])
-	_, _ = ch.conn.Write(packet)
+	packet := makePacket(Error, global.FSDServerName, session.callsign, fmt.Sprintf("%03d", result.Errno.Index()), result.Env, result.Errno.String())
+	session.logger.DebugF("[%s](%s) <- %s", session.connId, session.callsign, packet[:len(packet)-splitSignLen])
+	_, _ = session.conn.Write(packet)
 	if result.Fatal {
-		ch.disconnected.Store(true)
-		time.AfterFunc(500*time.Millisecond, func() {
-			_ = ch.conn.Close()
+		session.disconnected.Store(true)
+		time.AfterFunc(global.FSDDisconnectDelay, func() {
+			_ = session.conn.Close()
 		})
 	}
 }
 
-func (ch *ConnectionHandler) handleLine(line []byte) {
-	if ch.disconnected.Load() {
+func (session *Session) handleLine(line []byte) {
+	if session.disconnected.Load() {
 		return
 	}
 	command, data := parserCommandLine(line)
-	result := ch.handleCommand(command, data, line)
+	result := session.handleCommand(command, data, line)
 	if result == nil {
-		c.WarnF("[%s](%s) handleCommand return a nil result", ch.connId, ch.callsign)
+		session.logger.WarnF("[%s](%s) handleCommand return a nil result", session.connId, session.callsign)
 		return
 	}
 	if !result.Success {
-		c.ErrorF("[%s](%s) handleCommand fail, %s, %s", ch.connId, ch.callsign, result.Errno.String(), result.Err.Error())
-		ch.SendError(result)
+		session.logger.ErrorF("[%s](%s) handleCommand fail, %s, %s", session.connId, session.callsign, result.Errno.String(), result.Err.Error())
+		session.SendError(result)
 	}
 }
 
-func (ch *ConnectionHandler) HandleConnection() {
+func (session *Session) HandleConnection() {
 	defer func() {
-		c.DebugF("[%s](%s) x Connection closed", ch.connId, ch.callsign)
-		if err := ch.conn.Close(); err != nil && !isNetClosedError(err) {
-			c.WarnF("[%s](%s) Error occurred while closing connection, details: %v", ch.connId, ch.callsign, err)
+		session.logger.DebugF("[%s](%s) x Connection closed", session.connId, session.callsign)
+		if err := session.conn.Close(); err != nil && !isNetClosedError(err) {
+			session.logger.WarnF("[%s](%s) Error occurred while closing connection, details: %v", session.connId, session.callsign, err)
 		}
 	}()
-	scanner := bufio.NewScanner(ch.conn)
+	scanner := bufio.NewScanner(session.conn)
 	scanner.Split(createSplitFunc(splitSign))
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		c.DebugF("[%s](%s) -> %s", ch.connId, ch.callsign, line)
-		ch.handleLine(line)
-		if ch.disconnected.Load() {
+		session.logger.DebugF("[%s](%s) -> %s", session.connId, session.callsign, line)
+		session.handleLine(line)
+		if session.disconnected.Load() {
 			break
 		}
 	}
 
-	if ch.client != nil {
-		if ch.client.IsAtc() {
-			ch.clientManager.BroadcastMessage(makePacket(RemoveAtc, ch.client.Callsign(), "SERVER"), ch.client, BroadcastToClientInRange)
+	if session.client != nil {
+		if session.client.IsAtc() {
+			session.clientManager.BroadcastMessage(makePacket(RemoveAtc, session.client.Callsign(), global.FSDServerName), session.client, BroadcastToClientInRange)
 		} else {
-			ch.clientManager.BroadcastMessage(makePacket(RemovePilot, ch.client.Callsign(), "SERVER"), ch.client, BroadcastToClientInRange)
+			session.clientManager.BroadcastMessage(makePacket(RemovePilot, session.client.Callsign(), global.FSDServerName), session.client, BroadcastToClientInRange)
 		}
-		ch.client.MarkedDisconnect(false)
+		session.client.MarkedDisconnect(false)
 	}
 }
 
-func (ch *ConnectionHandler) Callsign() string { return ch.callsign }
+func (session *Session) Callsign() string { return session.callsign }
 
-func (ch *ConnectionHandler) SetCallsign(callsign string) { ch.callsign = callsign }
+func (session *Session) SetCallsign(callsign string) { session.callsign = callsign }
 
-func (ch *ConnectionHandler) User() *operation.User { return ch.user }
+func (session *Session) User() *operation.User { return session.user }
 
-func (ch *ConnectionHandler) SetUser(user *operation.User) { ch.user = user }
+func (session *Session) SetUser(user *operation.User) { session.user = user }
 
-func (ch *ConnectionHandler) ConnId() string { return ch.connId }
+func (session *Session) ConnId() string { return session.connId }
 
-func (ch *ConnectionHandler) Conn() net.Conn { return ch.conn }
+func (session *Session) Conn() net.Conn { return session.conn }
 
-func (ch *ConnectionHandler) SetDisconnected(disconnect bool) { ch.disconnected.Store(disconnect) }
+func (session *Session) SetDisconnected(disconnect bool) { session.disconnected.Store(disconnect) }

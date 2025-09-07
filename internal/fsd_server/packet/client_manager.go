@@ -3,8 +3,8 @@ package packet
 import (
 	"context"
 	"fmt"
-	c "github.com/half-nothing/simple-fsd/internal/config"
 	"github.com/half-nothing/simple-fsd/internal/interfaces"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/config"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
 	"math/rand"
 	"strconv"
@@ -17,7 +17,7 @@ type ClientManager struct {
 	clients            map[string]ClientInterface
 	lock               sync.RWMutex
 	shuttingDown       atomic.Bool
-	config             *c.Config
+	config             *config.Config
 	heartbeatSender    *HeartbeatSender
 	clientSlicePool    sync.Pool
 	applicationContent *interfaces.ApplicationContent
@@ -30,11 +30,12 @@ var (
 
 func NewClientManager(applicationContent *interfaces.ApplicationContent) *ClientManager {
 	once.Do(func() {
+		c := applicationContent.ConfigManager().Config()
 		if clientManager == nil {
 			clientManager = &ClientManager{
 				clients:            make(map[string]ClientInterface),
 				shuttingDown:       atomic.Bool{},
-				config:             applicationContent.Config(),
+				config:             c,
 				applicationContent: applicationContent,
 				clientSlicePool: sync.Pool{
 					New: func() interface{} {
@@ -42,7 +43,7 @@ func NewClientManager(applicationContent *interfaces.ApplicationContent) *Client
 					},
 				},
 			}
-			clientManager.heartbeatSender = NewHeartbeatSender(applicationContent.Config().Server.FSDServer.HeartbeatDuration, clientManager.SendHeartBeat)
+			clientManager.heartbeatSender = NewHeartbeatSender(applicationContent.Logger(), c.Server.FSDServer.HeartbeatDuration, clientManager.SendHeartBeat)
 		}
 	})
 	return clientManager
@@ -124,14 +125,14 @@ func (cm *ClientManager) SendHeartBeat() error {
 		return nil
 	}
 	randomInt := rand.Int()
-	packet := makePacket(WindDelta, "SERVER", string(AllClient), strconv.Itoa(randomInt%11-5), strconv.Itoa(randomInt%21-10))
+	packet := makePacket(WindDelta, "global.FSDServerName", string(AllClient), strconv.Itoa(randomInt%11-5), strconv.Itoa(randomInt%21-10))
 	cm.BroadcastMessage(packet, nil, BroadcastToAll)
 	return nil
 }
 
 func (cm *ClientManager) AddClient(client ClientInterface) error {
 	if cm.shuttingDown.Load() {
-		return fmt.Errorf("fsd_server shutting down")
+		return fmt.Errorf("Server shutting down")
 	}
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
@@ -169,7 +170,7 @@ func (cm *ClientManager) DeleteClient(callsign string) bool {
 
 func (cm *ClientManager) SendMessageTo(callsign string, message []byte) error {
 	if cm.shuttingDown.Load() {
-		return fmt.Errorf("fsd_server is shutting down")
+		return fmt.Errorf("Server is shutting down")
 	}
 
 	client, exists := cm.GetClient(callsign)
@@ -231,7 +232,7 @@ func (cm *ClientManager) BroadcastMessage(message []byte, fromClient ClientInter
 				wg.Done()
 			}()
 
-			c.DebugF("[Broadcast] -> [%s] %s", cl.Callsign(), message)
+			cm.applicationContent.Logger().DebugF("[Broadcast] -> [%s] %s", cl.Callsign(), message)
 			cl.SendLineWithoutLog(fullMsg)
 		}(client)
 	}

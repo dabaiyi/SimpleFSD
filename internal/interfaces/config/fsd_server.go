@@ -1,0 +1,91 @@
+// Package config
+package config
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/global"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
+	"runtime"
+	"time"
+)
+
+type FSDServerConfig struct {
+	FSDName              string                  `json:"fsd_name"` // FSD名称
+	Host                 string                  `json:"host"`
+	Port                 uint                    `json:"port"`
+	Address              string                  `json:"-"`
+	AirportDataFile      string                  `json:"airport_data_file"`
+	AirportData          map[string]*AirportData `json:"-"`
+	PosUpdatePoints      int                     `json:"pos_update_points"`
+	HeartbeatInterval    string                  `json:"heartbeat_interval"`
+	HeartbeatDuration    time.Duration           `json:"-"`
+	SessionCleanTime     string                  `json:"session_clean_time"`    // 会话保留时间
+	SessionCleanDuration time.Duration           `json:"-"`                     // 内部使用字段
+	MaxWorkers           int                     `json:"max_workers"`           // 并发线程数
+	MaxBroadcastWorkers  int                     `json:"max_broadcast_workers"` // 广播并发线程数
+	FirstMotdLine        string                  `json:"first_motd_line"`
+	Motd                 []string                `json:"motd"`
+}
+
+func defaultFSDServerConfig() *FSDServerConfig {
+	return &FSDServerConfig{
+		FSDName:             "Simple-Fsd",
+		Host:                "0.0.0.0",
+		Port:                6809,
+		AirportDataFile:     "data/airport.json",
+		PosUpdatePoints:     1,
+		HeartbeatInterval:   "60s",
+		SessionCleanTime:    "40s",
+		MaxWorkers:          128,
+		MaxBroadcastWorkers: 128,
+		FirstMotdLine:       "Welcome to use %[1]s v%[2]s",
+		Motd:                make([]string, 0),
+	}
+}
+
+func (config *FSDServerConfig) checkValid(logger log.LoggerInterface) *ValidResult {
+	if config.MaxBroadcastWorkers > runtime.NumCPU()*50 {
+		config.MaxBroadcastWorkers = runtime.NumCPU() * 50
+	}
+
+	if result := checkPort(config.Port); result.IsFail() {
+		return result
+	}
+
+	config.FirstMotdLine = fmt.Sprintf("Welcome to use %[1]s v%[2]s", config.FSDName, AppVersion.String())
+	data := make([]string, 0, 1+len(config.Motd))
+	data = append(data, config.FirstMotdLine)
+	data = append(data, config.Motd...)
+	config.Motd = data
+
+	config.Address = fmt.Sprintf("%s:%d", config.Host, config.Port)
+
+	if config.PosUpdatePoints < 0 {
+		return ValidFail(errors.New("invalid json field pos_update_points, pos_update_points must larger than 0"))
+	}
+
+	if bytes, err := cachedContent(logger, config.AirportDataFile, global.AirportDataFileUrl); err != nil {
+		logger.WarnF("fail to load airport data, airport check disable, %v", err)
+		config.AirportData = nil
+	} else if err := json.Unmarshal(bytes, &config.AirportData); err != nil {
+		return ValidFail(fmt.Errorf("invalid json file %s, %v", config.AirportDataFile, err))
+	} else {
+		logger.InfoF("Airport data loaded, found %d airports", len(config.AirportData))
+	}
+
+	if duration, err := time.ParseDuration(config.SessionCleanTime); err != nil {
+		return ValidFail(fmt.Errorf("invalid json field session_clean_time, duration parse error, %v", err))
+	} else {
+		config.SessionCleanDuration = duration
+	}
+
+	if duration, err := time.ParseDuration(config.HeartbeatInterval); err != nil {
+		return ValidFail(fmt.Errorf("invalid json field heartbead_interval, duration parse error, %v", err))
+	} else {
+		config.HeartbeatDuration = duration
+	}
+
+	return ValidPass()
+}

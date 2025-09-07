@@ -2,18 +2,20 @@ package database
 
 import (
 	"context"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"gorm.io/gorm"
 	"time"
 )
 
 type HistoryOperation struct {
+	logger       log.LoggerInterface
 	db           *gorm.DB
 	queryTimeout time.Duration
 }
 
-func NewHistoryOperation(db *gorm.DB, queryTimeout time.Duration) *HistoryOperation {
-	return &HistoryOperation{db: db, queryTimeout: queryTimeout}
+func NewHistoryOperation(logger log.LoggerInterface, db *gorm.DB, queryTimeout time.Duration) *HistoryOperation {
+	return &HistoryOperation{logger: logger, db: db, queryTimeout: queryTimeout}
 }
 
 func (historyOperation *HistoryOperation) NewHistory(cid int, callsign string, isAtc bool) (history *History) {

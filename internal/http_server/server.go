@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
-	c "github.com/half-nothing/simple-fsd/internal/config"
 	"github.com/half-nothing/simple-fsd/internal/fsd_server/packet"
 	"github.com/half-nothing/simple-fsd/internal/http_server/controller"
 	mid "github.com/half-nothing/simple-fsd/internal/http_server/middleware"
 	impl "github.com/half-nothing/simple-fsd/internal/http_server/service"
+	"github.com/half-nothing/simple-fsd/internal/http_server/service/store"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/service"
 	"github.com/labstack/echo-jwt/v4"
@@ -41,7 +41,9 @@ func (hc *HttpServerShutdownCallback) Invoke(ctx context.Context) error {
 }
 
 func StartHttpServer(applicationContent *ApplicationContent) {
-	config := applicationContent.Config()
+	config := applicationContent.ConfigManager().Config()
+	logger := applicationContent.Logger()
+
 	e := echo.New()
 	e.Logger.SetOutput(io.Discard)
 	e.Logger.SetLevel(log.OFF)
@@ -55,7 +57,7 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	case 2:
 		e.IPExtractor = echo.ExtractIPFromRealIPHeader()
 	default:
-		c.WarnF("Invalid proxy type %d, using default (direct)", httpConfig.ProxyType)
+		logger.WarnF("Invalid proxy type %d, using default (direct)", httpConfig.ProxyType)
 		e.IPExtractor = echo.ExtractIPDirect()
 	}
 
@@ -66,7 +68,7 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{Timeout: 30 * time.Second}))
 	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
 		LogErrorFunc: func(ctx echo.Context, err error, stack []byte) error {
-			c.ErrorF("Recovered from a fatal error: %v, stack: %s", err, string(stack))
+			logger.ErrorF("Recovered from a fatal error: %v, stack: %s", err, string(stack))
 			return err
 		},
 	}))
@@ -93,12 +95,12 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	}))
 
 	if httpConfig.Limits.RateLimit <= 0 {
-		c.WarnF("Invalid rate limit value %d, using default 15", httpConfig.Limits.RateLimit)
+		logger.WarnF("Invalid rate limit value %d, using default 15", httpConfig.Limits.RateLimit)
 		httpConfig.Limits.RateLimit = 15
 	}
 
 	if httpConfig.Limits.RateLimitDuration <= 0 {
-		c.WarnF("Invalid rate limit duration %v, using default 1m", httpConfig.Limits.RateLimitDuration)
+		logger.WarnF("Invalid rate limit duration %v, using default 1m", httpConfig.Limits.RateLimitDuration)
 		httpConfig.Limits.RateLimitDuration = time.Minute
 	}
 
@@ -109,11 +111,11 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	cleanupInterval := httpConfig.Limits.RateLimitDuration * 2
 	if cleanupInterval > time.Hour {
 		cleanupInterval = time.Hour
-		c.InfoF("Limiting cleanup interval to 1 hour for efficiency")
+		logger.InfoF("Limiting cleanup interval to 1 hour for efficiency")
 	}
 	ipPathLimiter.StartCleanup(cleanupInterval)
 
-	whazzupContent := fmt.Sprintf("url0=%s/api/clients", httpConfig.WhazzupUrlHeader)
+	whazzupContent := fmt.Sprintf("url0=%s/api/clients", httpConfig.ServerAddress)
 
 	e.Use(mid.RateLimitMiddleware(ipPathLimiter, mid.CombinedKeyFunc))
 
@@ -140,32 +142,37 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 
 	jwtMiddleware := echojwt.WithConfig(jwtConfig)
 
-	emailService := impl.NewEmailService(config.Server.HttpServer.Email)
+	emailService := impl.NewEmailService(logger, config.Server.HttpServer.Email)
 	impl.InitValidator(config.Server.HttpServer.Limits)
 
 	var storeService service.StoreServiceInterface
-	storeService = impl.NewLocalStoreService(httpConfig.Store)
+	storeService = store.NewLocalStoreService(logger, httpConfig.Store)
 	switch httpConfig.Store.StoreType {
 	case 1:
-		storeService = impl.NewALiYunOssStoreService(storeService, httpConfig.Store)
+		storeService = store.NewALiYunOssStoreService(logger, httpConfig.Store, storeService)
 	case 2:
-		storeService = impl.NewTencentCosStoreService(storeService, httpConfig.Store)
+		storeService = store.NewTencentCosStoreService(logger, httpConfig.Store, storeService)
 	}
 
-	userService := impl.NewUserService(emailService, httpConfig, applicationContent.UserOperation(), applicationContent.HistoryOperation(), storeService, applicationContent.AuditLogOperation())
-	clientManager := packet.NewClientManager(applicationContent)
-	clientService := impl.NewClientService(httpConfig, clientManager, emailService, applicationContent.UserOperation(), applicationContent.AuditLogOperation())
-	serverService := impl.NewServerService(config.Server, applicationContent.UserOperation(), applicationContent.ActivityOperation())
-	activityService := impl.NewActivityService(httpConfig, applicationContent.UserOperation(), applicationContent.ActivityOperation(), storeService, applicationContent.AuditLogOperation())
-	auditLogService := impl.NewAuditService(applicationContent.AuditLogOperation())
+	userOperation := applicationContent.Operations().UserOperation()
+	historyOperation := applicationContent.Operations().HistoryOperation()
+	auditLogOperation := applicationContent.Operations().AuditLogOperation()
+	activityOperation := applicationContent.Operations().ActivityOperation()
 
-	userController := controller.NewUserHandler(userService)
-	emailController := controller.NewEmailController(emailService)
-	clientController := controller.NewClientController(clientService)
-	serverController := controller.NewServerController(serverService)
-	activityController := controller.NewActivityController(activityService)
-	fileController := controller.NewFileController(storeService)
-	auditLogController := controller.NewAuditLogController(auditLogService)
+	userService := impl.NewUserService(logger, httpConfig, userOperation, historyOperation, auditLogOperation, storeService, emailService)
+	clientManager := packet.NewClientManager(applicationContent)
+	clientService := impl.NewClientService(logger, httpConfig, userOperation, auditLogOperation, clientManager, emailService)
+	serverService := impl.NewServerService(logger, config.Server, userOperation, activityOperation)
+	activityService := impl.NewActivityService(logger, httpConfig, userOperation, activityOperation, auditLogOperation, storeService)
+	auditLogService := impl.NewAuditService(logger, auditLogOperation)
+
+	userController := controller.NewUserHandler(logger, userService)
+	emailController := controller.NewEmailController(logger, emailService)
+	clientController := controller.NewClientController(logger, clientService)
+	serverController := controller.NewServerController(logger, serverService)
+	activityController := controller.NewActivityController(logger, activityService)
+	fileController := controller.NewFileController(logger, storeService)
+	auditLogController := controller.NewAuditLogController(logger, auditLogService)
 
 	apiGroup := e.Group("/api")
 	apiGroup.POST("/sessions", userController.UserLogin)
@@ -193,7 +200,7 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	clientGroup.DELETE("/:callsign", clientController.KillClient, jwtMiddleware)
 
 	serverGroup := apiGroup.Group("/server")
-	serverGroup.GET("/config", serverController.GetServerConfig)
+	serverGroup.GET("/base", serverController.GetServerConfig)
 	serverGroup.GET("/info", serverController.GetServerInfo, jwtMiddleware)
 	serverGroup.GET("/rating", serverController.GetServerOnlineTime, jwtMiddleware)
 
@@ -219,14 +226,14 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 
 	apiGroup.Use(middleware.Static(httpConfig.Store.LocalStorePath))
 
-	c.GetCleaner().Add(NewHttpServerShutdownCallback(e))
+	applicationContent.Cleaner().Add(NewHttpServerShutdownCallback(e))
 
 	protocol := "http"
 	if httpConfig.SSL.Enable {
 		protocol = "https"
 	}
-	c.InfoF("Starting %s server on %s", protocol, httpConfig.Address)
-	c.InfoF("Rate limit: %d requests per %v",
+	logger.InfoF("Starting %s server on %s", protocol, httpConfig.Address)
+	logger.InfoF("Rate limit: %d requests per %v",
 		httpConfig.Limits.RateLimit,
 		httpConfig.Limits.RateLimitDuration)
 
@@ -242,6 +249,6 @@ func StartHttpServer(applicationContent *ApplicationContent) {
 	}
 
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		c.Fatal("Http fsd_server error: %v", err)
+		logger.Fatal("Http fsd_server error: %v", err)
 	}
 }

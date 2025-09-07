@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -11,12 +12,13 @@ import (
 )
 
 type ActivityOperation struct {
+	logger       log.LoggerInterface
 	db           *gorm.DB
 	queryTimeout time.Duration
 }
 
-func NewActivityOperation(db *gorm.DB, queryTimeout time.Duration) *ActivityOperation {
-	return &ActivityOperation{db: db, queryTimeout: queryTimeout}
+func NewActivityOperation(logger log.LoggerInterface, db *gorm.DB, queryTimeout time.Duration) *ActivityOperation {
+	return &ActivityOperation{logger: logger, db: db, queryTimeout: queryTimeout}
 }
 
 func (activityOperation *ActivityOperation) NewActivity(user *User, title string, imageUrl string, activeTime time.Time, dep string, arr string, route string, distance int, notams string) (activity *Activity) {

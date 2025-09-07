@@ -3,8 +3,9 @@ package database
 import (
 	"context"
 	"errors"
-	c "github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/config"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/fsd"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -13,13 +14,14 @@ import (
 )
 
 type UserOperation struct {
-	config       *c.OtherConfig
+	logger       log.LoggerInterface
+	config       *config.GeneralConfig
 	db           *gorm.DB
 	queryTimeout time.Duration
 }
 
-func NewUserOperation(db *gorm.DB, queryTimeout time.Duration, config *c.OtherConfig) *UserOperation {
-	return &UserOperation{config: config, db: db, queryTimeout: queryTimeout}
+func NewUserOperation(logger log.LoggerInterface, db *gorm.DB, queryTimeout time.Duration, config *config.GeneralConfig) *UserOperation {
+	return &UserOperation{logger: logger, config: config, db: db, queryTimeout: queryTimeout}
 }
 
 func (userOperation *UserOperation) GetUserByUid(uid uint) (user *User, err error) {

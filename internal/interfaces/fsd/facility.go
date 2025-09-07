@@ -3,7 +3,7 @@ package fsd
 
 import (
 	"fmt"
-	c "github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/config"
 	"github.com/half-nothing/simple-fsd/internal/utils"
 )
 
@@ -55,13 +55,13 @@ func (r Rating) CheckRatingFacility(facility Facility) bool {
 	return RatingFacilityMap[r].CheckFacility(facility)
 }
 
-func SyncRatingConfig(config *c.Config) error {
+func SyncRatingConfig(config *config.Config) error {
 	if len(config.Rating) == 0 {
 		return nil
 	}
 	for rating, facility := range config.Rating {
-		r := utils.StrToInt(rating, -2)
-		if r <= -2 || r > 12 {
+		r := utils.StrToInt(rating, int(Ban)-1)
+		if r < int(Ban) || r > int(Administrator) {
 			return fmt.Errorf("illegal permission value %s", rating)
 		}
 		RatingFacilityMap[Rating(r)] = Facility(facility)

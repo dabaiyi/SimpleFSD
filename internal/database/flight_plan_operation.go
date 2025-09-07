@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	c "github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"github.com/half-nothing/simple-fsd/internal/utils"
 	"gorm.io/gorm"
@@ -12,13 +13,14 @@ import (
 )
 
 type FlightPlanOperation struct {
-	config       *c.OtherConfig
+	logger       log.LoggerInterface
+	config       *config.GeneralConfig
 	db           *gorm.DB
 	queryTimeout time.Duration
 }
 
-func NewFlightPlanOperation(db *gorm.DB, queryTimeout time.Duration, config *c.OtherConfig) *FlightPlanOperation {
-	return &FlightPlanOperation{config: config, db: db, queryTimeout: queryTimeout}
+func NewFlightPlanOperation(logger log.LoggerInterface, db *gorm.DB, queryTimeout time.Duration, config *config.GeneralConfig) *FlightPlanOperation {
+	return &FlightPlanOperation{logger: logger, config: config, db: db, queryTimeout: queryTimeout}
 }
 
 func (flightPlanOperation *FlightPlanOperation) GetFlightPlanByCid(cid int) (flightPlan *FlightPlan, err error) {

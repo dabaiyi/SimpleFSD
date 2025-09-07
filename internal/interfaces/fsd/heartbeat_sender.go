@@ -2,21 +2,27 @@ package fsd
 
 import (
 	"fmt"
-	"github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	"time"
 )
 
 type Heartbeat func() error
 
 type HeartbeatSender struct {
+	logger   log.LoggerInterface
 	interval time.Duration
 	ticker   *time.Ticker
 	stopChan chan struct{}
 	sendFunc Heartbeat
 }
 
-func NewHeartbeatSender(interval time.Duration, sendFunc Heartbeat) *HeartbeatSender {
+func NewHeartbeatSender(
+	logger log.LoggerInterface,
+	interval time.Duration,
+	sendFunc Heartbeat,
+) *HeartbeatSender {
 	return &HeartbeatSender{
+		logger:   logger,
 		interval: interval,
 		stopChan: make(chan struct{}),
 		sendFunc: sendFunc,
@@ -34,7 +40,7 @@ func (h *HeartbeatSender) Start() {
 			case <-h.ticker.C:
 				err := h.sendFunc()
 				if err != nil {
-					config.ErrorF("Error sending heartbeat: %v\n", err)
+					h.logger.ErrorF("Error sending heartbeat: %v\n", err)
 				}
 			case <-h.stopChan:
 				return

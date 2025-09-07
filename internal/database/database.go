@@ -3,7 +3,8 @@ package database
 import (
 	"context"
 	. "fmt"
-	c "github.com/half-nothing/simple-fsd/internal/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/config"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	. "github.com/half-nothing/simple-fsd/internal/interfaces/operation"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -11,15 +12,19 @@ import (
 )
 
 type DBCloseCallback struct {
-	db *gorm.DB
+	logger log.LoggerInterface
+	db     *gorm.DB
 }
 
-func NewDBCloseCallback(db *gorm.DB) *DBCloseCallback {
-	return &DBCloseCallback{db: db}
+func NewDBCloseCallback(logger log.LoggerInterface, db *gorm.DB) *DBCloseCallback {
+	return &DBCloseCallback{
+		logger: logger,
+		db:     db,
+	}
 }
 
 func (dc *DBCloseCallback) Invoke(ctx context.Context) error {
-	c.InfoF("Closing operation connection")
+	dc.logger.InfoF("Closing database connection")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	db, err := dc.db.DB()
@@ -30,17 +35,17 @@ func (dc *DBCloseCallback) Invoke(ctx context.Context) error {
 	return err
 }
 
-func ConnectDatabase(config *c.Config) (*DatabaseOperations, error) {
+func ConnectDatabase(lg log.LoggerInterface, config *config.Config, debug bool) (*DBCloseCallback, *DatabaseOperations, error) {
 	queryTimeout := config.Database.QueryDuration
 
-	connection := config.Database.GetConnection()
+	connection := config.Database.GetConnection(lg)
 
 	gormConfig := gorm.Config{}
 	gormConfig.DefaultTransactionTimeout = 5 * time.Second
 	gormConfig.PrepareStmt = true
 	gormConfig.TranslateError = true
 
-	if config.DebugMode {
+	if debug {
 		gormConfig.Logger = logger.Default.LogMode(logger.Error)
 	} else {
 		gormConfig.Logger = logger.Default.LogMode(logger.Silent)
@@ -48,16 +53,16 @@ func ConnectDatabase(config *c.Config) (*DatabaseOperations, error) {
 
 	db, err := gorm.Open(connection, &gormConfig)
 	if err != nil {
-		return nil, Errorf("error occured while connecting to operation: %v", err)
+		return nil, nil, Errorf("error occured while connecting to operation: %v", err)
 	}
 
 	if err = db.Migrator().AutoMigrate(&User{}, &FlightPlan{}, &History{}, &Activity{}, &ActivityATC{}, &ActivityPilot{}, &ActivityFacility{}, &AuditLog{}); err != nil {
-		return nil, Errorf("error occured while migrating operation: %v", err)
+		return nil, nil, Errorf("error occured while migrating operation: %v", err)
 	}
 
 	dbPool, err := db.DB()
 	if err != nil {
-		return nil, Errorf("error occured while creating operation pool: %v", err)
+		return nil, nil, Errorf("error occured while creating operation pool: %v", err)
 	}
 
 	maxOpenConnections := config.Database.ServerMaxConnections * 4 / 5 // 不超过数据库最大连接的80%
@@ -69,17 +74,15 @@ func ConnectDatabase(config *c.Config) (*DatabaseOperations, error) {
 
 	err = dbPool.Ping()
 	if err != nil {
-		return nil, Errorf("error occured while pinging operation: %v", err)
+		return nil, nil, Errorf("error occured while pinging operation: %v", err)
 	}
-	c.Info("Database initialized and connection established")
+	lg.Info("Database initialized and connection established")
 
-	c.GetCleaner().Add(NewDBCloseCallback(db))
+	userOperation := NewUserOperation(lg, db, queryTimeout, config.Server.General)
+	flightPlanOperation := NewFlightPlanOperation(lg, db, queryTimeout, config.Server.General)
+	historyOperation := NewHistoryOperation(lg, db, queryTimeout)
+	activityOperation := NewActivityOperation(lg, db, queryTimeout)
+	auditLogOperation := NewAuditLogOperation(lg, db, queryTimeout)
 
-	userOperation := NewUserOperation(db, queryTimeout, config.Server.General)
-	flightPlanOperation := NewFlightPlanOperation(db, queryTimeout, config.Server.General)
-	historyOperation := NewHistoryOperation(db, queryTimeout)
-	activityOperation := NewActivityOperation(db, queryTimeout)
-	auditLogOperation := NewAuditLogOperation(db, queryTimeout)
-
-	return NewDatabaseOperations(userOperation, flightPlanOperation, historyOperation, activityOperation, auditLogOperation), nil
+	return NewDBCloseCallback(lg, db), NewDatabaseOperations(userOperation, flightPlanOperation, historyOperation, activityOperation, auditLogOperation), nil
 }
