@@ -1,6 +1,6 @@
 # SimpleFSD
 
-[English](docs/README_en.md)(Outdate)  
+[English](docs/README_en.md)(Outdate)
 
 一个用于模拟飞行联飞的FSD, 使用Go语言编写  
 FSD支持计划同步, 计划锁定, 网页计划提交   
@@ -64,10 +64,8 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 
 ```json5
 {
-  // 调试模式, 会输出大量日志, 请不要在生产环境中打开
-  "debug_mode": false,
   // 配置文件版本, 通常情况下与软件版本一致
-  "config_version": "0.5.0",
+  "config_version": "0.6.0",
   // 服务配置
   "server": {
     // 通用配置项
@@ -109,6 +107,8 @@ FSD支持计划同步, 计划锁定, 网页计划提交
       "max_workers": 128,
       // 最大广播线程数, 用于广播消息的最大线程数
       "max_broadcast_workers": 128,
+      // 首行发送到客户端的motd格式, 第一个参数为fsd_name, 第二个为版本号
+      "first_motd_line": "Welcome to use %[1]s v%[2]s",
       // 要发送到客户端的motd消息
       "motd": [
         "This is my test fsd server"
@@ -118,6 +118,9 @@ FSD支持计划同步, 计划锁定, 网页计划提交
     "http_server": {
       // 是否启用Http服务器
       "enabled": false,
+      // 服务器的外网访问地址, 用于little nav map的在线航班显示
+      // 如果你不需要little nav map的在线航班显示, 你可以不管这个
+      "server_address": "http://127.0.0.1:6810",
       // Http服务器监听地址
       "host": "0.0.0.0",
       // Http服务器监听端口
@@ -126,10 +129,6 @@ FSD支持计划同步, 计划锁定, 网页计划提交
       "max_workers": 128,
       // whazzup更新时间
       "whazzup_cache_time": "15s",
-      // whazzup访问地址
-      // 需要填写外部访问地址用于little nav map的在线航班显示
-      // 如果你不需要little nav map的在线航班显示, 你可以不管这个
-      "whazzup_url_header": "http://127.0.0.1:6810",
       // 代理类型
       // 0 直连无代理服务器
       // 1 代理服务器使用 X-Forwarded-For Http头部
@@ -155,7 +154,7 @@ FSD支持计划同步, 计划锁定, 网页计划提交
         "access_key": "",
         // CDN访问加速域名, 本地存储此字段无效
         "cdn_domain": "",
-        // 使用内网地址上传文件, 仅阿里云OSS存储此字段无效
+        // 使用内网地址上传文件, 仅阿里云OSS存储此字段有效
         "use_internal_url": false,
         // 本地文件保存路径
         "local_store_path": "uploads",
@@ -177,14 +176,15 @@ FSD支持计划同步, 计划锁定, 网页计划提交
             // 存储路径前缀
             "store_prefix": "images",
             // 是否在本地也保存一份
-            "store_in_server": false
+            // 使用本地存储时此字段必须为true
+            "store_in_server": true
           }
         }
       },
       "limits": {
         // Api访问限速
         // 每个IP的每个接口均单独计算
-        "rate_limit": 60,
+        "rate_limit": 15,
         // Api访问限速窗口
         // 即 rate_limit 每 rate_limit_window
         // 滑动窗口计算
@@ -309,12 +309,22 @@ FSD支持计划同步, 计划锁定, 网页计划提交
     // 连接超时时间
     "connect_timeout": "5s",
     // 数据库最大连接数
+    // 这个数字请求改为你实际的数据库配置
     "server_max_connections": 32
   },
   // 特殊权限配置, 详情请见`特殊权限配置` 章节
   "rating": {}
 }
 ```
+
+### 命令行参数
+
+| 参数名                      | 类型     | 默认值             | 作用     |
+|:-------------------------|:-------|:----------------|:-------|
+| -help                    | ×      | ×               | 显示命令帮助 |
+| -debug                   | bool   | false           | 开启调试模式 |
+| -config                  | string | "./config.json" | 配置文件路径 |
+| -skip_email_verification | bool   | false           | 跳过邮箱验证 |
 
 ### 权限定义表
 
@@ -401,8 +411,8 @@ FSD支持计划同步, 计划锁定, 网页计划提交
 在提交时，需要您按照以下步骤进行：
 
 1. 对于可复现的bug:
-    1. 在[配置文件](#配置文件简介)中打开`"debug_mode": true,`以启用log文件
-    2. 重启FSD并复现此bug
+    1. 对可执行文件添加`-debug`命令行参数以启用详细日志输出
+    2. 复现此bug
     3. 将log文件上传至[Issue]
 2. 对于不可复现的bug:
     1. 尽可能的用文字描述此bug并提交至[Issue]
