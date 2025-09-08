@@ -67,17 +67,17 @@ func (h *AsyncHandler) rotateIfNeeded() error {
 	// 关闭旧文件
 	if h.currentFile != nil {
 		if err := h.currentFile.Close(); err != nil {
-			return fmt.Errorf("关闭日志文件失败: %w", err)
+			return fmt.Errorf("closing log file failed: %w", err)
 		}
 	}
 
 	// 创建新文件
 	logPath := h.getLogPath()
-	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
-		return fmt.Errorf("创建日志目录失败: %w", err)
+	if err := os.MkdirAll(filepath.Dir(logPath), global.DefaultDirectoryPermission); err != nil {
+		return fmt.Errorf("creating log directory failed: %w", err)
 	}
 
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, global.DefaultFilePermissions)
 	if err != nil {
 		return fmt.Errorf("failed to create a log file: %w", err)
 	}

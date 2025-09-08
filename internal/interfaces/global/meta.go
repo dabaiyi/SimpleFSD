@@ -13,8 +13,8 @@ var (
 )
 
 const (
-	AppVersion    = "0.5.0"
-	ConfigVersion = "0.5.0"
+	AppVersion    = "0.6.0"
+	ConfigVersion = "0.6.0"
 
 	DefaultFilePermissions     = 0644
 	DefaultDirectoryPermission = 0755

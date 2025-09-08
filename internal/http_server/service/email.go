@@ -98,6 +98,9 @@ func (emailService *EmailService) RenderTemplate(template *template.Template, da
 }
 
 func (emailService *EmailService) VerifyCode(email string, code int, cid int) error {
+	if emailService.config.EmailServer == nil {
+		return nil
+	}
 	email = strings.ToLower(email)
 	emailCode, ok := emailService.emailCodes[email]
 	if !ok {
@@ -121,6 +124,9 @@ func (emailService *EmailService) VerifyCode(email string, code int, cid int) er
 }
 
 func (emailService *EmailService) SendEmailCode(email string, cid int) error {
+	if emailService.config.EmailServer == nil {
+		return nil
+	}
 	email = strings.ToLower(email)
 	if lastSendTime, ok := emailService.lastSendTime[email]; ok {
 		if time.Since(lastSendTime) < emailService.config.SendDuration {
@@ -156,6 +162,9 @@ func (emailService *EmailService) SendEmailCode(email string, cid int) error {
 }
 
 func (emailService *EmailService) SendPermissionChangeEmail(user *operation.User, operator *operation.User) error {
+	if emailService.config.EmailServer == nil {
+		return nil
+	}
 	email := strings.ToLower(user.Email)
 	data := &EmailPermissionChangeData{
 		Cid:      fmt.Sprintf("%04d", user.Cid),
@@ -180,6 +189,9 @@ func (emailService *EmailService) SendPermissionChangeEmail(user *operation.User
 }
 
 func (emailService *EmailService) SendRatingChangeEmail(user *operation.User, operator *operation.User, oldRating, newRating fsd.Rating) error {
+	if emailService.config.EmailServer == nil {
+		return nil
+	}
 	email := strings.ToLower(user.Email)
 	data := &EmailRatingChangeData{
 		Cid:      strconv.Itoa(user.Cid),
@@ -206,6 +218,9 @@ func (emailService *EmailService) SendRatingChangeEmail(user *operation.User, op
 }
 
 func (emailService *EmailService) SendKickedFromServerEmail(user *operation.User, operator *operation.User, reason string) error {
+	if emailService.config.EmailServer == nil {
+		return nil
+	}
 	email := strings.ToLower(user.Email)
 	data := &EmailKickedFromServerData{
 		Cid:      strconv.Itoa(user.Cid),
@@ -238,6 +253,9 @@ var (
 )
 
 func (emailService *EmailService) SendEmailVerifyCode(req *RequestEmailVerifyCode) *ApiResponse[ResponseEmailVerifyCode] {
+	if emailService.config.EmailServer == nil {
+		return NewApiResponse(&SendEmailSuccess, Unsatisfied, &ResponseEmailVerifyCode{Email: req.Email})
+	}
 	if req.Email == "" || req.Cid <= 0 {
 		return NewApiResponse[ResponseEmailVerifyCode](&ErrIllegalParam, Unsatisfied, nil)
 	}

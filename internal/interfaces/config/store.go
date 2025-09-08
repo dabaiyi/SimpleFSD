@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/global"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	"os"
 	"path/filepath"
@@ -44,7 +45,7 @@ func (config *HttpServerStore) checkValid(logger log.LoggerInterface) *ValidResu
 	if config.LocalStorePath == "" {
 		return ValidFail(errors.New("invalid json field http_server.store.local_store_path, path cannot be empty"))
 	}
-	if err := os.MkdirAll(filepath.Clean(config.LocalStorePath), 0644); err != nil {
+	if err := os.MkdirAll(filepath.Clean(config.LocalStorePath), global.DefaultDirectoryPermission); err != nil {
 		return ValidFailWith(fmt.Errorf("error while creating local store path(%s)", config.LocalStorePath), err)
 	}
 	if result := config.FileLimit.CreateDir(logger, config.LocalStorePath); result.IsFail() {

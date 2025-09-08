@@ -21,11 +21,11 @@ var (
 
 func createFileWithContent(filePath string, content []byte) error {
 	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, global.DefaultDirectoryPermission); err != nil {
 		return err
 	}
 
-	return os.WriteFile(filePath, content, 0644)
+	return os.WriteFile(filePath, content, global.DefaultFilePermissions)
 }
 
 func cachedContent(logger log.LoggerInterface, filePath, url string) ([]byte, error) {
@@ -72,9 +72,6 @@ func checkPort(port uint) *ValidResult {
 	}
 	if port > 65535 {
 		return ValidFail(errors.New("port must be less than 65535"))
-	}
-	if port < 1024 {
-		return ValidFail(fmt.Errorf("the %d port may have a special usage, use it with caution", port))
 	}
 	return ValidPass()
 }

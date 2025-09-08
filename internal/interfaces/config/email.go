@@ -3,6 +3,7 @@ package config
 
 import (
 	"errors"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/global"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	"gopkg.in/gomail.v2"
 	"time"
@@ -50,12 +51,16 @@ func (config *EmailConfig) checkValid(logger log.LoggerInterface) *ValidResult {
 		return result
 	}
 
-	config.EmailServer = gomail.NewDialer(config.Host, config.Port, config.Username, config.Password)
-	dial, err := config.EmailServer.Dial()
-	if err != nil {
-		return ValidFailWith(errors.New("connecting to smtp server fail"), err)
+	if *global.SkipEmailVerification {
+		config.EmailServer = nil
+	} else {
+		config.EmailServer = gomail.NewDialer(config.Host, config.Port, config.Username, config.Password)
+		dial, err := config.EmailServer.Dial()
+		if err != nil {
+			return ValidFailWith(errors.New("connecting to smtp server fail"), err)
+		}
+		_ = dial.Close()
 	}
-	_ = dial.Close()
 
 	return ValidPass()
 }

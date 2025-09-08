@@ -3,6 +3,7 @@ package config
 
 import (
 	"errors"
+	"github.com/half-nothing/simple-fsd/internal/interfaces/global"
 	"github.com/half-nothing/simple-fsd/internal/interfaces/log"
 	"os"
 	"path/filepath"
@@ -59,7 +60,7 @@ func (config *HttpServerStoreFileLimits) CreateDir(_ log.LoggerInterface, root s
 	config.ImageLimit.RootPath = root
 	if config.ImageLimit.StoreInServer {
 		imagePath := filepath.Join(root, config.ImageLimit.StorePrefix)
-		if err := os.MkdirAll(imagePath, 0644); err != nil {
+		if err := os.MkdirAll(imagePath, global.DefaultDirectoryPermission); err != nil {
 			return ValidFailWith(errors.New("error creating the image directory"), err)
 		}
 	}
